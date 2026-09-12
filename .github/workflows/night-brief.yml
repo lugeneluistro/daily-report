@@ -1,0 +1,40 @@
+name: Night brief
+
+on:
+  schedule:
+    # 09:00 UTC = 5PM Manila (PHT, UTC+8), an hour before the WFH decision deadline.
+    - cron: '0 9 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: night-brief
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate tonight's brief
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run brief
+
+      - name: Commit brief.json if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/brief.json
+          git diff --cached --quiet && echo "No change" && exit 0
+          git commit -m "chore: refresh night brief [skip ci]"
+          git push

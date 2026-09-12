@@ -1,0 +1,63 @@
+{
+    "folders": [
+        {
+            "name": "daily-report",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.eol": "\n",
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true,
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "typescript.enablePromptUseWorkspaceTsdk": true,
+        "css.validate": false,
+        "editor.quickSuggestions": {
+            "strings": "on"
+        },
+        "search.exclude": {
+            "**/node_modules": true,
+            "**/dist": true,
+            "**/package-lock.json": true
+        },
+        "files.watcherExclude": {
+            "**/node_modules/**": true,
+            "**/dist/**": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "esbenp.prettier-vscode",
+            "bradlc.vscode-tailwindcss",
+            "editorconfig.editorconfig",
+            "dbaeumer.vscode-eslint",
+            "anthropic.claude-code"
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "dev",
+                "type": "npm",
+                "script": "dev",
+                "problemMatcher": [],
+                "isBackground": true
+            },
+            {
+                "label": "build",
+                "type": "npm",
+                "script": "build",
+                "group": "build",
+                "problemMatcher": ["$tsc"]
+            }
+        ]
+    }
+}
