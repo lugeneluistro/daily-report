@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { setPageTitle, toggleTheme } from '../store/themeConfigSlice';
 
+import BudgetOverview from '../components/NightBrief/BudgetOverview';
+import CalendarAccounts from '../components/NightBrief/CalendarAccounts';
 import CardShell from '../components/NightBrief/CardShell';
 import EmailAccounts from '../components/NightBrief/EmailAccounts';
 import RainChart from '../components/NightBrief/RainChart';
@@ -18,7 +20,7 @@ import IconInfoTriangle from '../components/Icon/IconInfoTriangle';
 import IconServer from '../components/Icon/IconServer';
 import IconTrendingUp from '../components/Icon/IconTrendingUp';
 
-import { FuelSide } from '../data/nightBrief';
+import { FuelSide, mockBudget } from '../data/nightBrief';
 
 const PH_ICONS = {
     success: <IconCircleCheck className="h-4 w-4" />,
@@ -51,7 +53,12 @@ const NightBrief = () => {
     const aiRefresh = useRefresh(reload);
     const cryptoRefresh = useRefresh(reload);
     const emailRefresh = useRefresh(reload);
-    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh, emailRefresh];
+    const calendarRefresh = useRefresh(reload);
+    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh, emailRefresh, calendarRefresh];
+
+    // Budget is mock-only (no integration yet), so its refresh is purely
+    // decorative and stays out of "Refresh all" — there is nothing real to pull.
+    const budgetRefresh = useRefresh();
 
     const anyBusy = cards.some((c) => c.busy);
     const refreshAll = () => cards.forEach((c) => c.refresh());
@@ -64,10 +71,11 @@ const NightBrief = () => {
         dispatch(toggleTheme('dark'));
     }, [dispatch]);
 
-    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, email, gapsNote } = data;
+    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, email, calendar, gapsNote } = data;
     const hasFuel = fuel !== null;
     const hasCrypto = coins.length > 0;
     const hasEmail = email !== null && email.length > 0;
+    const hasCalendar = calendar !== null && calendar.length > 0;
     const fuelSides = fuel ? [fuel.diesel, fuel.gasoline].filter((f): f is FuelSide => f !== null) : [];
 
     return (
@@ -262,6 +270,22 @@ const NightBrief = () => {
                         </CardShell>
                     </div>
                 )}
+
+                {/* CALENDAR — absent when no Google account is configured */}
+                {hasCalendar && (
+                    <div className="col-span-12">
+                        <CardShell title="Calendar" busy={calendarRefresh.busy} updatedAt={updatedAt} onRefresh={calendarRefresh.refresh}>
+                            <CalendarAccounts accounts={calendar!} />
+                        </CardShell>
+                    </div>
+                )}
+
+                {/* BUDGET — mock data, no integration yet. Always shown, never claims to be live. */}
+                <div className="col-span-12">
+                    <CardShell title="Budget" meta="Mock data — no bank integration yet" busy={budgetRefresh.busy} updatedAt={null} onRefresh={budgetRefresh.refresh}>
+                        <BudgetOverview budget={mockBudget} />
+                    </CardShell>
+                </div>
             </div>
 
             {gapsNote && (

@@ -34,6 +34,8 @@ jobs:
           GMAIL_ACCOUNT_1_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_1_REFRESH_TOKEN }}
           GMAIL_ACCOUNT_2_LABEL: ${{ secrets.GMAIL_ACCOUNT_2_LABEL }}
           GMAIL_ACCOUNT_2_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_2_REFRESH_TOKEN }}
+        # The GMAIL_* secrets power both the Email and Calendar cards — same
+        # account, same refresh token, the scopes just cover both APIs.
         run: npm run brief
 
       - name: Commit brief.json if it changed

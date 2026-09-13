@@ -1,13 +1,14 @@
-// One-time local helper: run this once per Gmail account to mint a refresh
-// token, then save it as a GitHub secret. Never runs in CI.
+// One-time local helper: run this once per Google account (Gmail + Calendar
+// share the same OAuth client and token) to mint a refresh token, then save
+// it as a GitHub secret. Never runs in CI.
 //
 // Setup (once): in Google Cloud Console, create a project, enable the
-// Gmail API, and create an OAuth client of type "Desktop app". Copy its
-// client ID and secret.
+// Gmail API and the Google Calendar API, and create an OAuth client of type
+// "Desktop app". Copy its client ID and secret.
 //
 // Usage (run twice, once per account, logging into a different Google
 // account each time when the browser tab opens):
-//   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... node scripts/brief/gmail-auth-setup.mjs
+//   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... node scripts/brief/google-auth-setup.mjs
 //
 // A Desktop-app OAuth client doesn't require pre-registering the redirect
 // URI — Google allows any loopback port for this client type.
@@ -23,6 +24,8 @@ if (!clientId || !clientSecret) {
     process.exit(1);
 }
 
+const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/calendar.readonly'];
+
 const server = http.createServer();
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
@@ -32,11 +35,11 @@ const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
 authUrl.searchParams.set('client_id', clientId);
 authUrl.searchParams.set('redirect_uri', redirectUri);
 authUrl.searchParams.set('response_type', 'code');
-authUrl.searchParams.set('scope', 'https://www.googleapis.com/auth/gmail.readonly');
+authUrl.searchParams.set('scope', SCOPES.join(' '));
 authUrl.searchParams.set('access_type', 'offline');
 authUrl.searchParams.set('prompt', 'consent'); // forces a refresh_token even on repeat runs
 
-console.log('\nOpen this URL, sign in with the Gmail account you want to add, and approve access:\n');
+console.log('\nOpen this URL, sign in with the Google account you want to add, and approve access to Gmail and Calendar:\n');
 console.log(authUrl.toString());
 console.log('\nWaiting for the browser redirect...\n');
 
@@ -76,12 +79,12 @@ const tokens = await tokenRes.json();
 
 if (!tokens.refresh_token) {
     console.error(
-        '\nNo refresh_token in the response. If you\'ve run this before for the same account, Google may skip issuing a new one — ' +
+        '\nNo refresh_token in the response. If you\'ve run this before for the same account (even for Gmail alone, before Calendar was added), Google may skip issuing a new one — ' +
             'revoke the app\'s access at https://myaccount.google.com/permissions and run this again.',
     );
     process.exit(1);
 }
 
-console.log('\nSave this as a GitHub Actions secret (GMAIL_ACCOUNT_1_REFRESH_TOKEN or GMAIL_ACCOUNT_2_REFRESH_TOKEN):\n');
+console.log('\nSave this as a GitHub Actions secret (GMAIL_ACCOUNT_1_REFRESH_TOKEN or GMAIL_ACCOUNT_2_REFRESH_TOKEN — same token powers both the Email and Calendar cards):\n');
 console.log(tokens.refresh_token);
-console.log('\nAlso set a matching GMAIL_ACCOUNT_{1,2}_LABEL secret (e.g. "Personal" or "Work") so the card knows which account is which.\n');
+console.log('\nAlso set a matching GMAIL_ACCOUNT_{1,2}_LABEL secret (e.g. "Personal" or "Work") so the cards know which account is which.\n');

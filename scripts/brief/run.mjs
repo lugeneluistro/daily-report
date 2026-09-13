@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds } from './sources.mjs';
 import { fetchGmail } from './gmail.mjs';
+import { fetchCalendar } from './calendar.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,12 +33,13 @@ async function main() {
     const clock = manilaNow();
     const { live, note: advisoryNote } = liveStatus(clock);
 
-    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult] = await Promise.all([
+    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult, calendarResult] = await Promise.all([
         fetchWeather(),
         fetchCoins(),
         fetchPagasa(),
         fetchFeeds(),
         fetchGmail(),
+        fetchCalendar(),
     ]);
 
     const deterministicGaps = [];
@@ -52,6 +54,9 @@ async function main() {
     // A configured account that fails to fetch is a real gap.
     if (gmailResult.ok && gmailResult.partialFailure) {
         deterministicGaps.push(`email account(s) unreachable: ${gmailResult.partialFailure.join('; ')}`);
+    }
+    if (calendarResult.ok && calendarResult.partialFailure) {
+        deterministicGaps.push(`calendar account(s) unreachable: ${calendarResult.partialFailure.join('; ')}`);
     }
 
     const emailAccounts = gmailResult.ok ? gmailResult.data.map((a) => ({ label: a.label, unreadCount: a.unreadCount, candidates: a.candidates })) : [];
@@ -115,10 +120,11 @@ async function main() {
         coins,
         aiNews: judged.aiNews.map((n, i) => ({ id: `ai-${i + 1}`, ...n })),
         phNews: judged.phNews.map((n, i) => ({ id: `ph-${i + 1}`, ...n })),
-        // Absent (not just empty) when no Gmail account is configured, so the card hides.
+        // Absent (not just empty) when no Gmail/Google account is configured, so the card hides.
         email: gmailResult.ok
             ? judged.email.map((acct) => ({ ...acct, items: acct.items.map((item, i) => ({ id: item.id || `email-${i}`, ...item })) }))
             : null,
+        calendar: calendarResult.ok ? calendarResult.data : null,
         gapsNote: gaps.length ? gaps.join('; ') : null,
     };
 

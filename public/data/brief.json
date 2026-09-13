@@ -136,5 +136,21 @@
       ]
     }
   ],
+  "calendar": [
+    {
+      "label": "Personal",
+      "events": [
+        { "id": "cal-1", "title": "Gym", "startLabel": "9:30 PM", "location": null, "duringShift": true },
+        { "id": "cal-2", "title": "Dentist — Dr. Reyes", "startLabel": "Tomorrow 2:00 PM", "location": "Makati Medical Center", "duringShift": false }
+      ]
+    },
+    {
+      "label": "Work",
+      "events": [
+        { "id": "cal-3", "title": "Sprint review", "startLabel": "Tomorrow 9:00 AM", "location": "Google Meet", "duringShift": false },
+        { "id": "cal-4", "title": "On-call handoff", "startLabel": "11:00 PM", "location": null, "duringShift": true }
+      ]
+    }
+  ],
   "gapsNote": null
 }

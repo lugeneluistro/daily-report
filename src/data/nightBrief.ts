@@ -83,6 +83,39 @@ export interface EmailAccountSummary {
     items: EmailItem[];
 }
 
+export interface CalendarEvent {
+    id: string;
+    title: string;
+    /** Pre-formatted Manila-local display time, e.g. "8:30 PM", "Tomorrow 9:00 AM", "All day". */
+    startLabel: string;
+    location: string | null;
+    /** Starts inside tonight's 8PM-7AM window. */
+    duringShift: boolean;
+}
+
+export interface CalendarAccountSummary {
+    /** A short label ("Personal", "Work"), not the raw email address. */
+    label: string;
+    /** Next few events over the following ~36h, chronological. */
+    events: CalendarEvent[];
+}
+
+export interface BudgetCategory {
+    name: string;
+    spent: number;
+    limit: number;
+}
+
+/** Mock only — not wired to a real source yet. See mockBudget below. */
+export interface BudgetMock {
+    monthLabel: string;
+    totalSpent: number;
+    totalLimit: number;
+    daysLeftInMonth: number;
+    categories: BudgetCategory[];
+    note: string;
+}
+
 /** The contract written by scripts/brief/run.mjs to public/data/brief.json. */
 export interface BriefPayload {
     /** True only for the committed seed file — never written by a real run. */
@@ -100,6 +133,8 @@ export interface BriefPayload {
     phNews: NewsItem[];
     /** Null when no Gmail account is configured — the card is then absent. */
     email: EmailAccountSummary[] | null;
+    /** Null when no Google account is configured — the card is then absent. */
+    calendar: CalendarAccountSummary[] | null;
     gapsNote: string | null;
 }
 
@@ -242,5 +277,40 @@ export const sampleBrief: BriefPayload = {
             ],
         },
     ],
+    calendar: [
+        {
+            label: 'Personal',
+            events: [
+                { id: 'cal-1', title: 'Gym', startLabel: '9:30 PM', location: null, duringShift: true },
+                { id: 'cal-2', title: "Dentist — Dr. Reyes", startLabel: 'Tomorrow 2:00 PM', location: 'Makati Medical Center', duringShift: false },
+            ],
+        },
+        {
+            label: 'Work',
+            events: [
+                { id: 'cal-3', title: 'Sprint review', startLabel: 'Tomorrow 9:00 AM', location: 'Google Meet', duringShift: false },
+                { id: 'cal-4', title: 'On-call handoff', startLabel: '11:00 PM', location: null, duringShift: true },
+            ],
+        },
+    ],
     gapsNote: null,
+};
+
+/**
+ * Mock only — no budget source is wired up yet. Shown as-is regardless of
+ * isLive, with its own "Mock data" meta line so it never reads as real.
+ */
+export const mockBudget: BudgetMock = {
+    monthLabel: 'September',
+    totalSpent: 28450,
+    totalLimit: 35000,
+    daysLeftInMonth: 16,
+    categories: [
+        { name: 'Groceries', spent: 6200, limit: 8000 },
+        { name: 'Transport', spent: 3100, limit: 3500 },
+        { name: 'Dining', spent: 4800, limit: 4000 },
+        { name: 'Utilities', spent: 5350, limit: 6000 },
+        { name: 'Savings goal', spent: 9000, limit: 9000 },
+    ],
+    note: 'On track if spending holds — Dining is already over for the month.',
 };
