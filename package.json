@@ -8,9 +8,11 @@
         "build": "tsc && vite build",
         "preview": "vite preview",
         "brief": "node scripts/brief/run.mjs",
-        "google-auth": "node scripts/brief/google-auth-setup.mjs"
+        "google-auth": "node scripts/brief/google-auth-setup.mjs",
+        "server": "node server/index.mjs"
     },
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.125.0",
         "@emotion/react": "^11.10.6",
         "@popperjs/core": "^2.11.6",
         "@reduxjs/toolkit": "^2.2.7",
@@ -21,19 +23,25 @@
         "@types/node": "^22.4.0",
         "@types/react": "^18.0.21",
         "@types/react-dom": "^18.0.6",
+        "cors": "^2.8.5",
+        "express": "^4.21.1",
+        "node-cron": "^3.0.3",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",
         "react-popper": "^2.3.0",
         "react-redux": "^9.1.2",
         "react-router-dom": "^6.4.2",
         "react-scripts": "5.0.1",
+        "rss-parser": "^3.13.0",
         "web-vitals": "^4.2.3",
-        "yup": "^1.4.0"
+        "yup": "^1.4.0",
+        "zod": "^3.23.8"
     },
     "devDependencies": {
-        "@anthropic-ai/sdk": "^0.125.0",
         "@tailwindcss/forms": "^0.5.3",
         "@tailwindcss/typography": "^0.5.7",
+        "@types/cors": "^2.8.17",
+        "@types/express": "^4.17.21",
         "@types/react": "^18.0.27",
         "@types/react-dom": "^18.0.10",
         "@vitejs/plugin-react": "^4.3.1",
@@ -45,10 +53,8 @@
         "react-animate-height": "^3.0.4",
         "react-i18next": "^15.0.1",
         "react-perfect-scrollbar": "^1.5.8",
-        "rss-parser": "^3.13.0",
         "tailwindcss": "^3.4.1",
         "typescript": "^4.9.3",
-        "vite": "^5.4.1",
-        "zod": "^3.23.8"
+        "vite": "^5.4.1"
     }
 }

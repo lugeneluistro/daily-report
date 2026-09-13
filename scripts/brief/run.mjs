@@ -1,7 +1,8 @@
 // Orchestrator: runs every fetcher, makes the one LLM call, merges
-// deterministic + judged output, and writes public/data/brief.json.
+// deterministic + judged output. generateBrief() returns the payload with no
+// file I/O — used by both this CLI entry point and server/index.mjs.
 //
-// Usage: ANTHROPIC_API_KEY=... node scripts/brief/run.mjs
+// CLI usage: ANTHROPIC_API_KEY=... node scripts/brief/run.mjs
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -13,9 +14,11 @@ import { fetchCalendar } from './calendar.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUTPUT_PATH = join(__dirname, '..', '..', 'public', 'data', 'brief.json');
+export const OUTPUT_PATH = join(__dirname, '..', '..', 'public', 'data', 'brief.json');
 
 const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const WEEKDAY_LABEL = { Sun: 'Sun', Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Thu', Fri: 'Fri', Sat: 'Sat' };
+const MONTH_LABEL = { 1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec' };
 
 /** SKILL.md §2: the call binds Mon-Wed, and Thu before 8PM. Every other run
  * is advisory only. */
@@ -27,9 +30,18 @@ function liveStatus(clock) {
     return { live: false, note: 'no team to send home tonight, and Gino is in Calamba' };
 }
 
-const WEEKDAY_LABEL = { Sun: 'Sun', Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Thu', Fri: 'Fri', Sat: 'Sat' };
+function buildWearLine(weather) {
+    const { minTemp, mentionRainGear } = weather;
+    let wear;
+    if (minTemp >= 26) wear = 'light, it stays warm';
+    else if (minTemp >= 24) wear = 'normal';
+    else wear = 'take a jacket';
+    return `Low ${minTemp}°C · ${wear}${mentionRainGear ? ' · bring rain gear' : ''}`;
+}
 
-async function main() {
+/** Runs every fetcher, makes the LLM call, and returns the brief payload.
+ * Pure — never touches the filesystem. */
+export async function generateBrief() {
     const clock = manilaNow();
     const { live, note: advisoryNote } = liveStatus(clock);
 
@@ -106,7 +118,7 @@ async function main() {
 
     const gaps = [...deterministicGaps, ...judged.gaps];
 
-    const brief = {
+    return {
         isSample: false,
         generatedAt: new Date().toISOString(),
         brief: {
@@ -127,24 +139,19 @@ async function main() {
         calendar: calendarResult.ok ? calendarResult.data : null,
         gapsNote: gaps.length ? gaps.join('; ') : null,
     };
+}
 
+async function main() {
+    const brief = await generateBrief();
     await mkdir(dirname(OUTPUT_PATH), { recursive: true });
     await writeFile(OUTPUT_PATH, JSON.stringify(brief, null, 2) + '\n', 'utf-8');
     console.log(`Wrote ${OUTPUT_PATH}`);
 }
 
-const MONTH_LABEL = { 1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec' };
-
-function buildWearLine(weather) {
-    const { minTemp, mentionRainGear } = weather;
-    let wear;
-    if (minTemp >= 26) wear = 'light, it stays warm';
-    else if (minTemp >= 24) wear = 'normal';
-    else wear = 'take a jacket';
-    return `Low ${minTemp}°C · ${wear}${mentionRainGear ? ' · bring rain gear' : ''}`;
+// Only run as a CLI when invoked directly — not when imported by the server.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    main().catch((err) => {
+        console.error(err);
+        process.exit(1);
+    });
 }
-
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});

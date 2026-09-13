@@ -5,7 +5,10 @@
 // Philippines news, and surfacing which unread emails look worth attention.
 
 import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
+// zodOutputFormat requires schemas built from the zod/v4 subpath specifically
+// (see node_modules/@anthropic-ai/sdk/helpers/zod.d.ts) — the classic 'zod'
+// import is still v3 internals and fails inside the SDK's JSON-schema step.
+import { z } from 'zod/v4';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 
 const MODEL = 'claude-sonnet-5';
