@@ -65,6 +65,24 @@ export interface VerdictInfo {
     deadline: string;
 }
 
+export interface EmailItem {
+    id: string;
+    from: string;
+    subject: string;
+    /** Why this was surfaced, written by the nightly filter — not the raw Gmail snippet. */
+    summary: string;
+    /** Looks time-sensitive or needs a reply this shift. */
+    important: boolean;
+}
+
+export interface EmailAccountSummary {
+    /** A short label ("Personal", "Work"), not the raw email address. */
+    label: string;
+    unreadCount: number;
+    /** Up to 5 unread messages the nightly filter judged worth surfacing. */
+    items: EmailItem[];
+}
+
 /** The contract written by scripts/brief/run.mjs to public/data/brief.json. */
 export interface BriefPayload {
     /** True only for the committed seed file — never written by a real run. */
@@ -80,6 +98,8 @@ export interface BriefPayload {
     coins: Coin[];
     aiNews: NewsItem[];
     phNews: NewsItem[];
+    /** Null when no Gmail account is configured — the card is then absent. */
+    email: EmailAccountSummary[] | null;
     gapsNote: string | null;
 }
 
@@ -185,6 +205,41 @@ export const sampleBrief: BriefPayload = {
             source: 'bsp.gov.ph',
             href: 'https://www.bsp.gov.ph',
             tone: 'info',
+        },
+    ],
+    email: [
+        {
+            label: 'Personal',
+            unreadCount: 12,
+            items: [
+                {
+                    id: 'email-1',
+                    from: 'Landlord',
+                    subject: 'Re: Lease renewal',
+                    summary: 'Waiting on your reply before Friday to lock in the renewed rate.',
+                    important: true,
+                },
+                {
+                    id: 'email-2',
+                    from: 'BPI Alerts',
+                    subject: 'Your statement is ready',
+                    summary: 'Routine statement notice, nothing time-sensitive.',
+                    important: false,
+                },
+            ],
+        },
+        {
+            label: 'Work',
+            unreadCount: 4,
+            items: [
+                {
+                    id: 'email-3',
+                    from: 'Maria (PM)',
+                    subject: 'Sprint review moved to tomorrow AM',
+                    summary: 'Meeting was pulled forward — check before the shift starts.',
+                    important: true,
+                },
+            ],
         },
     ],
     gapsNote: null,

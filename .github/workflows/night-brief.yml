@@ -28,6 +28,12 @@ jobs:
       - name: Generate tonight's brief
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GMAIL_ACCOUNT_1_LABEL: ${{ secrets.GMAIL_ACCOUNT_1_LABEL }}
+          GMAIL_ACCOUNT_1_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_1_REFRESH_TOKEN }}
+          GMAIL_ACCOUNT_2_LABEL: ${{ secrets.GMAIL_ACCOUNT_2_LABEL }}
+          GMAIL_ACCOUNT_2_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_2_REFRESH_TOKEN }}
         run: npm run brief
 
       - name: Commit brief.json if it changed

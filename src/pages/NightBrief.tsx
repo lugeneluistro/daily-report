@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { setPageTitle, toggleTheme } from '../store/themeConfigSlice';
 
 import CardShell from '../components/NightBrief/CardShell';
+import EmailAccounts from '../components/NightBrief/EmailAccounts';
 import RainChart from '../components/NightBrief/RainChart';
 import RefreshButton from '../components/NightBrief/RefreshButton';
 import Sparkline from '../components/NightBrief/Sparkline';
@@ -49,7 +50,8 @@ const NightBrief = () => {
     const phRefresh = useRefresh(reload);
     const aiRefresh = useRefresh(reload);
     const cryptoRefresh = useRefresh(reload);
-    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh];
+    const emailRefresh = useRefresh(reload);
+    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh, emailRefresh];
 
     const anyBusy = cards.some((c) => c.busy);
     const refreshAll = () => cards.forEach((c) => c.refresh());
@@ -62,9 +64,10 @@ const NightBrief = () => {
         dispatch(toggleTheme('dark'));
     }, [dispatch]);
 
-    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, gapsNote } = data;
+    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, email, gapsNote } = data;
     const hasFuel = fuel !== null;
     const hasCrypto = coins.length > 0;
+    const hasEmail = email !== null && email.length > 0;
     const fuelSides = fuel ? [fuel.diesel, fuel.gasoline].filter((f): f is FuelSide => f !== null) : [];
 
     return (
@@ -247,6 +250,15 @@ const NightBrief = () => {
                                     </div>
                                 ))}
                             </div>
+                        </CardShell>
+                    </div>
+                )}
+
+                {/* EMAIL — absent when no Gmail account is configured */}
+                {hasEmail && (
+                    <div className="col-span-12">
+                        <CardShell title="Email" busy={emailRefresh.busy} updatedAt={updatedAt} onRefresh={emailRefresh.refresh}>
+                            <EmailAccounts accounts={email!} />
                         </CardShell>
                     </div>
                 )}

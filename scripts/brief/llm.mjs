@@ -1,7 +1,8 @@
 // The one LLM call per run. Everything fetchable was already fetched by
-// sources.mjs — this only asks for the parts that are genuinely judgment:
-// the NCR work-suspension call, extracting this week's fuel adjustment out
-// of the news feeds, and filtering/ranking the AI and Philippines news.
+// sources.mjs/gmail.mjs — this only asks for the parts that are genuinely
+// judgment: the NCR work-suspension call, extracting this week's fuel
+// adjustment out of the news feeds, filtering/ranking the AI and
+// Philippines news, and surfacing which unread emails look worth attention.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
@@ -43,6 +44,25 @@ const BriefSchema = z.object({
         .describe('Extracted from the news candidates below, not a live DOE feed.'),
     phNews: z.array(NewsItemSchema).max(3),
     aiNews: z.array(NewsItemSchema).max(4),
+    email: z
+        .array(
+            z.object({
+                label: z.string().describe('Copied verbatim from the matching account in emailAccounts.'),
+                unreadCount: z.number().describe('Copied verbatim from the matching account — never recomputed.'),
+                items: z
+                    .array(
+                        z.object({
+                            id: z.string().describe('Copied verbatim from a candidate id — never invented.'),
+                            from: z.string(),
+                            subject: z.string(),
+                            summary: z.string().describe('One short line on why this was surfaced, or a plain restatement of the snippet.'),
+                            important: z.boolean().describe('True only if it looks time-sensitive or needs a reply this shift.'),
+                        }),
+                    )
+                    .max(5),
+            }),
+        )
+        .describe('One entry per account in emailAccounts, same order, even if items ends up empty.'),
     gaps: z.array(z.string()).describe('Judgment-based gaps only, e.g. "fuel unconfirmed for this week". Do not report an absent crypto card or a normal weekend as a gap.'),
 });
 
@@ -70,13 +90,16 @@ Bar: would this change how a Python tech lead works this week? Include model rel
 ## Philippines (exactly 3)
 Lead with genuinely good news: economy, infrastructure, science, tech, education, sports, culture. Include a negative item only if it changes what Gino does or needs to be aware of (transport strike, major outage, health advisory, security incident, a peso/economic move touching salary or savings) — mark those alert:true. Never pad the positive quota with trivia; a real alert beats a filler feel-good item.
 
+## Email (per account in emailAccounts)
+For each account, you're given its real unreadCount and up to 10 candidate unread messages (id, from, subject, snippet). Pick up to 5 worth surfacing — prioritize ones that look time-sensitive, from a real person rather than a list/marketing/no-reply sender, or reference something actionable. Set important:true only for ones that look like they genuinely need attention this shift (someone waiting on a reply, a deadline, an urgent-sounding subject); everything else you choose to surface is important:false. Copy id, from, and subject verbatim from the candidate — never invent one, and never surface a message not in the candidate list. unreadCount is copied from the input as given, not recomputed from how many candidates you saw (the candidate list is capped at 10 and may undercount). If an account has zero candidates, still include it in the output with an empty items array and its given unreadCount. Do not add a gap for an account with nothing worth surfacing — that is a normal outcome, not a failure.
+
 ## Rules for every news item
 - highlight is a short phrase pulled from the title to render in accent colour, or null — don't force one.
 - tone: success (good news), warning (negative/alert), info (neutral/factual), primary/secondary (AI card only, vary between items).
 - href must be copied verbatim from the candidate's own link — never invented, never a homepage substituted for the real article.
 - gaps: only real search/fetch failures or "could not find X after looking" — never list an outcome that is simply absent-because-nothing-happened (e.g. no coin above the crypto gate, a normal weekend with no fuel news yet).`;
 
-export async function judgeBrief({ manilaClock, weather, pagasa, feeds, pagasaFailedPages, feedsFailedSources }) {
+export async function judgeBrief({ manilaClock, weather, pagasa, feeds, pagasaFailedPages, feedsFailedSources, emailAccounts }) {
     const client = new Anthropic();
 
     const payload = {
@@ -94,6 +117,7 @@ export async function judgeBrief({ manilaClock, weather, pagasa, feeds, pagasaFa
         pagasaUnreachablePages: pagasaFailedPages ?? [],
         newsCandidates: feeds ?? [],
         feedsUnreachable: feedsFailedSources ?? [],
+        emailAccounts: emailAccounts ?? [],
     };
 
     const response = await client.messages.parse({

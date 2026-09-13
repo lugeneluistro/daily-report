@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds } from './sources.mjs';
+import { fetchGmail } from './gmail.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,7 +32,13 @@ async function main() {
     const clock = manilaNow();
     const { live, note: advisoryNote } = liveStatus(clock);
 
-    const [weatherResult, coinsResult, pagasaResult, feedsResult] = await Promise.all([fetchWeather(), fetchCoins(), fetchPagasa(), fetchFeeds()]);
+    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult] = await Promise.all([
+        fetchWeather(),
+        fetchCoins(),
+        fetchPagasa(),
+        fetchFeeds(),
+        fetchGmail(),
+    ]);
 
     const deterministicGaps = [];
     if (!weatherResult.ok) deterministicGaps.push(`weather sources failed (${weatherResult.reason})`);
@@ -41,6 +48,14 @@ async function main() {
     const feedsFailedSources = feedsResult.ok ? feedsResult.partialFailure ?? [] : ['all feeds'];
     if (!feedsResult.ok) deterministicGaps.push(`news sources failed (${feedsResult.reason})`);
 
+    // "Not configured" is not a gap — it's an expected absence until secrets are set.
+    // A configured account that fails to fetch is a real gap.
+    if (gmailResult.ok && gmailResult.partialFailure) {
+        deterministicGaps.push(`email account(s) unreachable: ${gmailResult.partialFailure.join('; ')}`);
+    }
+
+    const emailAccounts = gmailResult.ok ? gmailResult.data.map((a) => ({ label: a.label, unreadCount: a.unreadCount, candidates: a.candidates })) : [];
+
     const judged = await judgeBrief({
         manilaClock: clock,
         weather: weatherResult.ok ? weatherResult.data : null,
@@ -48,6 +63,7 @@ async function main() {
         feeds: feedsResult.ok ? feedsResult.data : [],
         pagasaFailedPages,
         feedsFailedSources,
+        emailAccounts,
     });
 
     // Crypto: drop every coin under the 500% gate. An empty array means the
@@ -86,6 +102,7 @@ async function main() {
     const gaps = [...deterministicGaps, ...judged.gaps];
 
     const brief = {
+        isSample: false,
         generatedAt: new Date().toISOString(),
         brief: {
             dateLabel: `${WEEKDAY_LABEL[clock.weekday]} ${clock.day} ${MONTH_LABEL[clock.month]}`,
@@ -98,6 +115,10 @@ async function main() {
         coins,
         aiNews: judged.aiNews.map((n, i) => ({ id: `ai-${i + 1}`, ...n })),
         phNews: judged.phNews.map((n, i) => ({ id: `ph-${i + 1}`, ...n })),
+        // Absent (not just empty) when no Gmail account is configured, so the card hides.
+        email: gmailResult.ok
+            ? judged.email.map((acct) => ({ ...acct, items: acct.items.map((item, i) => ({ id: item.id || `email-${i}`, ...item })) }))
+            : null,
         gapsNote: gaps.length ? gaps.join('; ') : null,
     };
 
