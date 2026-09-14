@@ -14,6 +14,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { generateBrief, OUTPUT_PATH } from '../scripts/brief/run.mjs';
+import { checkBillingAlert } from '../scripts/brief/billing.mjs';
 
 const PORT = 4700;
 const HOST = '127.0.0.1';
@@ -30,6 +31,7 @@ async function runGeneration() {
         await writeFile(OUTPUT_PATH, JSON.stringify(brief, null, 2) + '\n', 'utf-8');
         cached = brief;
         console.log(`[${new Date().toISOString()}] Generated brief, wrote ${OUTPUT_PATH}`);
+        await checkBillingAlert(brief.claimekBilling);
         return brief;
     })();
 

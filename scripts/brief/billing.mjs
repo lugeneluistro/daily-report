@@ -5,6 +5,13 @@
 // one is a real gap.
 
 import { CostExplorerClient, GetCostAndUsageCommand } from '@aws-sdk/client-cost-explorer';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ALERT_STATE_PATH = join(__dirname, '.billing-alert-state.json');
+const DEFAULT_DANGER_THRESHOLD_USD = 100;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const dateStr = (d) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
@@ -137,4 +144,61 @@ export async function fetchClaimekBilling() {
         return { ok: false, reason: `all configured providers failed: ${failed.join('; ')}` };
     }
     return { ok: true, data, partialFailure: failed.length ? failed : null };
+}
+
+async function readAlertState() {
+    try {
+        return JSON.parse(await readFile(ALERT_STATE_PATH, 'utf-8'));
+    } catch {
+        return { lastAlertDate: null };
+    }
+}
+
+/** Free, personal-use WhatsApp send via CallMeBot — one HTTP GET, no
+ * business account/template approval needed. Setup: message
+ * "I allow callmebot to send me messages" to +34 694 25 79 52 on WhatsApp,
+ * it replies with your API key. */
+async function sendWhatsAppAlert(message) {
+    const phone = process.env.CALLMEBOT_PHONE;
+    const apiKey = process.env.CALLMEBOT_API_KEY;
+    if (!phone || !apiKey) return { ok: false, reason: 'CallMeBot not configured' };
+
+    try {
+        const url = `https://api.callmebot.com/whatsapp.php?${new URLSearchParams({ phone, text: message, apikey: apiKey })}`;
+        const res = await fetch(url);
+        if (!res.ok) return { ok: false, reason: `CallMeBot returned ${res.status}` };
+        return { ok: true };
+    } catch (err) {
+        return { ok: false, reason: err.message };
+    }
+}
+
+/**
+ * Sends a WhatsApp "danger" alert once per calendar day when combined
+ * OpenAI+AWS month-to-date spend crosses BILLING_DANGER_THRESHOLD_USD
+ * (default $100). Never throws — a notification hiccup shouldn't fail the
+ * whole generation run.
+ */
+export async function checkBillingAlert(claimekBilling) {
+    if (!claimekBilling || claimekBilling.providers.length === 0) return;
+
+    const threshold = Number(process.env.BILLING_DANGER_THRESHOLD_USD) || DEFAULT_DANGER_THRESHOLD_USD;
+    const combined = claimekBilling.providers.reduce((sum, p) => sum + p.monthToDateUsd, 0);
+    if (combined < threshold) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const state = await readAlertState();
+    if (state.lastAlertDate === today) return; // already alerted today
+
+    const breakdown = claimekBilling.providers.map((p) => `${p.provider} $${p.monthToDateUsd.toFixed(2)}`).join(', ');
+    const message = `Claimek Billing alert: ${claimekBilling.monthLabel} spend is $${combined.toFixed(2)}, over your $${threshold} threshold. (${breakdown})`;
+
+    const result = await sendWhatsAppAlert(message);
+    if (result.ok) {
+        console.log(`Sent billing danger alert (combined $${combined.toFixed(2)} >= $${threshold}).`);
+        await writeFile(ALERT_STATE_PATH, JSON.stringify({ lastAlertDate: today }, null, 2) + '\n', 'utf-8');
+    } else if (result.reason !== 'CallMeBot not configured') {
+        // Configured but failed — don't record lastAlertDate, so the next run retries.
+        console.warn(`Billing danger alert not sent: ${result.reason}`);
+    }
 }

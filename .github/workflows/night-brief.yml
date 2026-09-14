@@ -38,18 +38,24 @@ jobs:
           OPENAI_ORG_ID: ${{ secrets.OPENAI_ORG_ID }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_API_KEY: ${{ secrets.CALLMEBOT_API_KEY }}
+          BILLING_DANGER_THRESHOLD_USD: ${{ secrets.BILLING_DANGER_THRESHOLD_USD }}
         # The GMAIL_* secrets power both the Email and Calendar cards — same
         # account, same refresh token, the scopes just cover both APIs.
         # OPENAI_ORG_ID is optional. Claimek Billing needs at least one of
         # OPENAI_ADMIN_API_KEY / AWS_ACCESS_KEY_ID+SECRET set — either alone
         # is fine, the card just shows whichever provider is configured.
+        # CALLMEBOT_* are optional too — without them, billing alerts are
+        # just skipped (no WhatsApp message, no error).
+        # BILLING_DANGER_THRESHOLD_USD defaults to 100 if unset.
         run: npm run brief
 
       - name: Commit brief.json if it changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/brief.json
+          git add public/data/brief.json scripts/brief/.billing-alert-state.json
           git diff --cached --quiet && echo "No change" && exit 0
           git commit -m "chore: refresh night brief [skip ci]"
           git push

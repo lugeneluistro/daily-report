@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds } from './sources.mjs';
 import { fetchGmail } from './gmail.mjs';
 import { fetchCalendar } from './calendar.mjs';
-import { fetchClaimekBilling } from './billing.mjs';
+import { fetchClaimekBilling, checkBillingAlert } from './billing.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -152,6 +152,7 @@ async function main() {
     await mkdir(dirname(OUTPUT_PATH), { recursive: true });
     await writeFile(OUTPUT_PATH, JSON.stringify(brief, null, 2) + '\n', 'utf-8');
     console.log(`Wrote ${OUTPUT_PATH}`);
+    await checkBillingAlert(brief.claimekBilling);
 }
 
 // Only run as a CLI when invoked directly — not when imported by the server.
