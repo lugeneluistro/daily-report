@@ -5,6 +5,7 @@ import { setPageTitle, toggleTheme } from '../store/themeConfigSlice';
 import BudgetOverview from '../components/NightBrief/BudgetOverview';
 import CalendarAccounts from '../components/NightBrief/CalendarAccounts';
 import CardShell from '../components/NightBrief/CardShell';
+import ClaimekBilling from '../components/NightBrief/ClaimekBilling';
 import EmailAccounts from '../components/NightBrief/EmailAccounts';
 import RainChart from '../components/NightBrief/RainChart';
 import RefreshButton from '../components/NightBrief/RefreshButton';
@@ -54,7 +55,8 @@ const NightBrief = () => {
     const cryptoRefresh = useRefresh(reload);
     const emailRefresh = useRefresh(reload);
     const calendarRefresh = useRefresh(reload);
-    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh, emailRefresh, calendarRefresh];
+    const billingRefresh = useRefresh(reload);
+    const cards = [fuelRefresh, heroRefresh, weatherRefresh, phRefresh, aiRefresh, cryptoRefresh, emailRefresh, calendarRefresh, billingRefresh];
 
     // Budget is mock-only (no integration yet), so its refresh is purely
     // decorative and stays out of "Refresh all" — there is nothing real to pull.
@@ -71,11 +73,12 @@ const NightBrief = () => {
         dispatch(toggleTheme('dark'));
     }, [dispatch]);
 
-    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, email, calendar, gapsNote } = data;
+    const { brief, verdict, weatherHours, fuel, coins, aiNews, phNews, email, calendar, claimekBilling, gapsNote } = data;
     const hasFuel = fuel !== null;
     const hasCrypto = coins.length > 0;
     const hasEmail = email !== null && email.length > 0;
     const hasCalendar = calendar !== null && calendar.length > 0;
+    const hasBilling = claimekBilling !== null && claimekBilling.providers.length > 0;
     const fuelSides = fuel ? [fuel.diesel, fuel.gasoline].filter((f): f is FuelSide => f !== null) : [];
 
     return (
@@ -276,6 +279,15 @@ const NightBrief = () => {
                     <div className="col-span-12">
                         <CardShell title="Calendar" busy={calendarRefresh.busy} updatedAt={updatedAt} onRefresh={calendarRefresh.refresh}>
                             <CalendarAccounts accounts={calendar!} />
+                        </CardShell>
+                    </div>
+                )}
+
+                {/* CLAIMEK BILLING — absent when neither OpenAI nor AWS billing is configured */}
+                {hasBilling && (
+                    <div className="col-span-12">
+                        <CardShell title="Claimek Billing" busy={billingRefresh.busy} updatedAt={updatedAt} onRefresh={billingRefresh.refresh}>
+                            <ClaimekBilling billing={claimekBilling!} />
                         </CardShell>
                     </div>
                 )}

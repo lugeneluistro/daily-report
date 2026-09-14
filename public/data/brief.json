@@ -152,5 +152,31 @@
       ]
     }
   ],
+  "claimekBilling": {
+    "monthLabel": "Sep 2026",
+    "providers": [
+      {
+        "provider": "OpenAI",
+        "monthToDateUsd": 184.32,
+        "currency": "usd",
+        "topItems": [
+          { "name": "Text generation", "amount": 151.2 },
+          { "name": "Embeddings", "amount": 22.4 },
+          { "name": "Fine-tuning", "amount": 10.72 }
+        ]
+      },
+      {
+        "provider": "AWS",
+        "monthToDateUsd": 96.87,
+        "currency": "usd",
+        "topItems": [
+          { "name": "EC2 - Other", "amount": 41.05 },
+          { "name": "Amazon RDS Service", "amount": 28.3 },
+          { "name": "Amazon S3", "amount": 14.52 },
+          { "name": "CloudWatch", "amount": 13.0 }
+        ]
+      }
+    ]
+  },
   "gapsNote": null
 }

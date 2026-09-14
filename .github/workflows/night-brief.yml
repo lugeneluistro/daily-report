@@ -34,8 +34,15 @@ jobs:
           GMAIL_ACCOUNT_1_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_1_REFRESH_TOKEN }}
           GMAIL_ACCOUNT_2_LABEL: ${{ secrets.GMAIL_ACCOUNT_2_LABEL }}
           GMAIL_ACCOUNT_2_REFRESH_TOKEN: ${{ secrets.GMAIL_ACCOUNT_2_REFRESH_TOKEN }}
+          OPENAI_ADMIN_API_KEY: ${{ secrets.OPENAI_ADMIN_API_KEY }}
+          OPENAI_ORG_ID: ${{ secrets.OPENAI_ORG_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         # The GMAIL_* secrets power both the Email and Calendar cards — same
         # account, same refresh token, the scopes just cover both APIs.
+        # OPENAI_ORG_ID is optional. Claimek Billing needs at least one of
+        # OPENAI_ADMIN_API_KEY / AWS_ACCESS_KEY_ID+SECRET set — either alone
+        # is fine, the card just shows whichever provider is configured.
         run: npm run brief
 
       - name: Commit brief.json if it changed

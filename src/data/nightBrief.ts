@@ -116,6 +116,25 @@ export interface BudgetMock {
     note: string;
 }
 
+export interface BillingLineItem {
+    name: string;
+    amount: number;
+}
+
+export interface BillingProvider {
+    provider: 'OpenAI' | 'AWS';
+    monthToDateUsd: number;
+    currency: string;
+    /** Top spend line items (OpenAI: line_item; AWS: service), highest first. */
+    topItems: BillingLineItem[];
+}
+
+export interface ClaimekBillingInfo {
+    monthLabel: string;
+    /** One entry per configured provider — OpenAI, AWS, or both. */
+    providers: BillingProvider[];
+}
+
 /** The contract written by scripts/brief/run.mjs to public/data/brief.json. */
 export interface BriefPayload {
     /** True only for the committed seed file — never written by a real run. */
@@ -135,6 +154,8 @@ export interface BriefPayload {
     email: EmailAccountSummary[] | null;
     /** Null when no Google account is configured — the card is then absent. */
     calendar: CalendarAccountSummary[] | null;
+    /** Null when neither OpenAI nor AWS billing is configured — the card is then absent. */
+    claimekBilling: ClaimekBillingInfo | null;
     gapsNote: string | null;
 }
 
@@ -293,6 +314,32 @@ export const sampleBrief: BriefPayload = {
             ],
         },
     ],
+    claimekBilling: {
+        monthLabel: 'Sep 2026',
+        providers: [
+            {
+                provider: 'OpenAI',
+                monthToDateUsd: 184.32,
+                currency: 'usd',
+                topItems: [
+                    { name: 'Text generation', amount: 151.2 },
+                    { name: 'Embeddings', amount: 22.4 },
+                    { name: 'Fine-tuning', amount: 10.72 },
+                ],
+            },
+            {
+                provider: 'AWS',
+                monthToDateUsd: 96.87,
+                currency: 'usd',
+                topItems: [
+                    { name: 'EC2 - Other', amount: 41.05 },
+                    { name: 'Amazon RDS Service', amount: 28.3 },
+                    { name: 'Amazon S3', amount: 14.52 },
+                    { name: 'CloudWatch', amount: 13.0 },
+                ],
+            },
+        ],
+    },
     gapsNote: null,
 };
 

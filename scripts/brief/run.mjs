@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds } from './sources.mjs';
 import { fetchGmail } from './gmail.mjs';
 import { fetchCalendar } from './calendar.mjs';
+import { fetchClaimekBilling } from './billing.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -45,13 +46,14 @@ export async function generateBrief() {
     const clock = manilaNow();
     const { live, note: advisoryNote } = liveStatus(clock);
 
-    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult, calendarResult] = await Promise.all([
+    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult, calendarResult, billingResult] = await Promise.all([
         fetchWeather(),
         fetchCoins(),
         fetchPagasa(),
         fetchFeeds(),
         fetchGmail(),
         fetchCalendar(),
+        fetchClaimekBilling(),
     ]);
 
     const deterministicGaps = [];
@@ -69,6 +71,9 @@ export async function generateBrief() {
     }
     if (calendarResult.ok && calendarResult.partialFailure) {
         deterministicGaps.push(`calendar account(s) unreachable: ${calendarResult.partialFailure.join('; ')}`);
+    }
+    if (billingResult.ok && billingResult.partialFailure) {
+        deterministicGaps.push(`billing provider(s) unreachable: ${billingResult.partialFailure.join('; ')}`);
     }
 
     const emailAccounts = gmailResult.ok ? gmailResult.data.map((a) => ({ label: a.label, unreadCount: a.unreadCount, candidates: a.candidates })) : [];
@@ -137,6 +142,7 @@ export async function generateBrief() {
             ? judged.email.map((acct) => ({ ...acct, items: acct.items.map((item, i) => ({ id: item.id || `email-${i}`, ...item })) }))
             : null,
         calendar: calendarResult.ok ? calendarResult.data : null,
+        claimekBilling: billingResult.ok ? { monthLabel: `${MONTH_LABEL[clock.month]} ${clock.year}`, providers: billingResult.data } : null,
         gapsNote: gaps.length ? gaps.join('; ') : null,
     };
 }
