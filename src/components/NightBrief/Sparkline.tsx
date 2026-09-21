@@ -71,15 +71,7 @@ const Sparkline: FC<SparklineProps> = ({ values, stroke, fill, width = 180, heig
             aria-label={label}
         >
             {fill && <path d={area} fill={fill} stroke="none" />}
-            <path
-                d={line}
-                fill="none"
-                stroke={stroke}
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect={stretch ? 'non-scaling-stroke' : undefined}
-            />
+            <path d={line} fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect={stretch ? 'non-scaling-stroke' : undefined} />
         </svg>
     );
 };

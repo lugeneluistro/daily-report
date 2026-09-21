@@ -27,9 +27,7 @@ const Timeline: FC<TimelineProps> = ({ items, icons }) => (
                     {item.title}
                     {item.highlight && <span className={item.alert ? 'text-[#f0b45e]' : 'text-[#4ade9b]'}>{item.highlight}</span>}
                     {item.alert && (
-                        <span className="ml-1.5 inline-block rounded-[3px] bg-warning/[0.14] px-1.5 py-0.5 align-[1px] text-[9.5px] font-extrabold uppercase tracking-[0.1em] text-warning">
-                            Alert
-                        </span>
+                        <span className="ml-1.5 inline-block rounded-[3px] bg-warning/[0.14] px-1.5 py-0.5 align-[1px] text-[9.5px] font-extrabold uppercase tracking-[0.1em] text-warning">Alert</span>
                     )}
                 </div>
 

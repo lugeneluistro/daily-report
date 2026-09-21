@@ -13,10 +13,6 @@ export interface WeatherHour {
     label: string;
     /** Rain chance for tonight, 0-100. */
     tonight: number;
-    /** Rain chance over the same hour last night, 0-100. */
-    lastNight: number;
-    /** Temperature in celsius. */
-    temp: number;
 }
 
 export interface NewsItem {
@@ -36,32 +32,37 @@ export interface Coin {
     name: string;
     price: string;
     change: string;
-    /** Only coins at or above +500% in 24h render on a live run. */
+    /** Up 500%+ in 24h — highlighted. Every tracked coin is shown either way. */
     clearsGate: boolean;
     series: number[];
 }
 
 export interface FuelSide {
     label: string;
-    price: string;
+    /** Pump price per litre; null when the news only reported the weekly change. */
+    price: string | null;
     delta: string;
     rising: boolean;
 }
 
 export interface FuelInfo {
-    diesel: FuelSide | null;
     gasoline: FuelSide | null;
+    /** When it's best to fuel, e.g. "Fill up before Tuesday 6AM". */
     call: string | null;
-    note: string | null;
 }
 
 export interface VerdictInfo {
+    /** Drives the work-from-home card's colour: office = green, watch = amber, wfh = red. */
     call: Verdict;
-    title: string;
-    signal: string;
-    binding: string;
-    reason: string;
-    chips: string[];
+    /** A government work suspension covering NCR for tonight. */
+    ncrSuspension: 'yes' | 'no' | 'unknown';
+    /** "None", or a short status such as "Signal No. 2 over NCR". */
+    cyclone: string;
+    /** "None", or the active rainfall warning such as "Orange until 2AM". */
+    rainfall: string;
+    /** Jacket / sweatshirt advice from the night's low. Null if weather failed. */
+    jacket: 'Recommended' | 'Not recommended' | null;
+    lowTempC: number | null;
     deadline: string;
 }
 
@@ -76,7 +77,7 @@ export interface EmailItem {
 }
 
 export interface EmailAccountSummary {
-    /** A short label ("Personal", "Work"), not the raw email address. */
+    /** The account's email address (or a GMAIL_ACCOUNT_n_LABEL override). */
     label: string;
     unreadCount: number;
     /** Up to 5 unread messages the nightly filter judged worth surfacing. */
@@ -94,7 +95,7 @@ export interface CalendarEvent {
 }
 
 export interface CalendarAccountSummary {
-    /** A short label ("Personal", "Work"), not the raw email address. */
+    /** The account's email address (or a GMAIL_ACCOUNT_n_LABEL override). */
     label: string;
     /** Next few events over the following ~36h, chronological. */
     events: CalendarEvent[];
@@ -144,9 +145,9 @@ export interface BriefPayload {
     brief: { dateLabel: string; windowLabel: string; place: string };
     verdict: VerdictInfo;
     weatherHours: WeatherHour[];
-    /** Null when the week's adjustment could not be found in the news feeds. */
+    /** Null when the week's gasoline adjustment could not be found in the news feeds. */
     fuel: FuelInfo | null;
-    /** Empty when no coin clears the +500% gate — the card is then absent. */
+    /** All three tracked coins; empty only if the price fetch failed. */
     coins: Coin[];
     aiNews: NewsItem[];
     phNews: NewsItem[];
@@ -169,33 +170,30 @@ export const sampleBrief: BriefPayload = {
     },
     verdict: {
         call: 'watch',
-        title: 'Watch it',
-        signal: 'Orange rainfall warning to 2AM',
-        binding: 'Wed · the call binds tonight',
-        reason:
-            'No NCR work suspension announced and no tropical cyclone inside PAR, so there is no wind signal. The deciding signal is the orange rainfall warning, with Buendia already gutter-deep on the Makati approach.',
-        chips: ['Rain peaks 78% at 3AM', 'Low 23°C · take a jacket'],
+        ncrSuspension: 'no',
+        cyclone: 'None',
+        rainfall: 'Orange until 2AM',
+        jacket: 'Not recommended',
+        lowTempC: 25,
         deadline: 'Decide by 6PM',
     },
     weatherHours: [
-        { label: '8PM', tonight: 12, lastNight: 8, temp: 29 },
-        { label: '9PM', tonight: 18, lastNight: 10, temp: 28 },
-        { label: '10PM', tonight: 26, lastNight: 14, temp: 28 },
-        { label: '11PM', tonight: 41, lastNight: 17, temp: 27 },
-        { label: '12AM', tonight: 55, lastNight: 22, temp: 27 },
-        { label: '1AM', tonight: 66, lastNight: 26, temp: 26 },
-        { label: '2AM', tonight: 74, lastNight: 31, temp: 25 },
-        { label: '3AM', tonight: 78, lastNight: 29, temp: 24 },
-        { label: '4AM', tonight: 71, lastNight: 24, temp: 23 },
-        { label: '5AM', tonight: 58, lastNight: 19, temp: 23 },
-        { label: '6AM', tonight: 44, lastNight: 15, temp: 24 },
-        { label: '7AM', tonight: 33, lastNight: 11, temp: 25 },
+        { label: '8PM', tonight: 12 },
+        { label: '9PM', tonight: 18 },
+        { label: '10PM', tonight: 26 },
+        { label: '11PM', tonight: 41 },
+        { label: '12AM', tonight: 55 },
+        { label: '1AM', tonight: 66 },
+        { label: '2AM', tonight: 74 },
+        { label: '3AM', tonight: 78 },
+        { label: '4AM', tonight: 71 },
+        { label: '5AM', tonight: 58 },
+        { label: '6AM', tonight: 44 },
+        { label: '7AM', tonight: 33 },
     ],
     fuel: {
-        diesel: { label: 'Diesel', price: '₱65.55', delta: '+₱1.35 this week', rising: true },
         gasoline: { label: 'Gasoline', price: '₱71.95', delta: '+₱0.90 this week', rising: true },
         call: 'Fill up before Tuesday 6AM',
-        note: 'Kerosene bucks it at −₱0.45. Announced Monday, not yet in effect.',
     },
     coins: [
         {
@@ -205,6 +203,22 @@ export const sampleBrief: BriefPayload = {
             change: '+612%',
             clearsGate: true,
             series: [12, 12, 11, 12, 13, 12, 14, 16, 20, 28, 42, 60, 78, 92, 100],
+        },
+        {
+            ticker: 'LTC',
+            name: 'Litecoin',
+            price: '$92.40',
+            change: '-3.2%',
+            clearsGate: false,
+            series: [60, 58, 62, 55, 50, 54, 48, 52, 45, 49, 44, 47, 43, 45, 42],
+        },
+        {
+            ticker: 'LINK',
+            name: 'Chainlink',
+            price: '$18.06',
+            change: '+1.8%',
+            clearsGate: false,
+            series: [50, 52, 48, 55, 51, 57, 53, 58, 54, 60, 56, 61, 58, 62, 59],
         },
     ],
     aiNews: [
@@ -231,6 +245,22 @@ export const sampleBrief: BriefPayload = {
             source: 'python.org',
             href: 'https://www.python.org',
             tone: 'info',
+        },
+        {
+            id: 'ai-4',
+            title: 'Open-weight coding model closes the gap on Python tasks',
+            summary: 'A freely downloadable model now lands within a few points of the paid leaders on real-repo fixes, which matters for on-prem or cost-capped teams.',
+            source: 'example.com',
+            href: 'https://example.com',
+            tone: 'secondary',
+        },
+        {
+            id: 'ai-5',
+            title: 'Major API provider halves batch pricing',
+            summary: 'Overnight jobs such as test generation and log triage get cheaper, a good fit for night-shift pipelines.',
+            source: 'example.com',
+            href: 'https://example.com',
+            tone: 'primary',
         },
     ],
     phNews: [
@@ -262,10 +292,28 @@ export const sampleBrief: BriefPayload = {
             href: 'https://www.bsp.gov.ph',
             tone: 'info',
         },
+        {
+            id: 'ph-4',
+            title: 'IT-BPM hiring outlook ',
+            highlight: 'improves for Q4',
+            summary: 'Industry groups expect steady tech and support hiring, which is good for the local talent pool.',
+            source: 'example.com',
+            href: 'https://example.com',
+            tone: 'success',
+        },
+        {
+            id: 'ph-5',
+            title: 'MRT-3 adds late-night trips on ',
+            highlight: 'weekdays',
+            summary: 'Extra runs after 11PM should ease the shift-change commute.',
+            source: 'example.com',
+            href: 'https://example.com',
+            tone: 'info',
+        },
     ],
     email: [
         {
-            label: 'Personal',
+            label: 'lugeneluistro@gmail.com',
             unreadCount: 12,
             items: [
                 {
@@ -285,7 +333,7 @@ export const sampleBrief: BriefPayload = {
             ],
         },
         {
-            label: 'Work',
+            label: 'lugene12@gmail.com',
             unreadCount: 4,
             items: [
                 {
@@ -300,14 +348,14 @@ export const sampleBrief: BriefPayload = {
     ],
     calendar: [
         {
-            label: 'Personal',
+            label: 'lugeneluistro@gmail.com',
             events: [
                 { id: 'cal-1', title: 'Gym', startLabel: '9:30 PM', location: null, duringShift: true },
                 { id: 'cal-2', title: "Dentist — Dr. Reyes", startLabel: 'Tomorrow 2:00 PM', location: 'Makati Medical Center', duringShift: false },
             ],
         },
         {
-            label: 'Work',
+            label: 'lugene12@gmail.com',
             events: [
                 { id: 'cal-3', title: 'Sprint review', startLabel: 'Tomorrow 9:00 AM', location: 'Google Meet', duringShift: false },
                 { id: 'cal-4', title: 'On-call handoff', startLabel: '11:00 PM', location: null, duringShift: true },

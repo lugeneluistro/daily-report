@@ -7,14 +7,14 @@
 // (POST /api/brief/refresh) and on an internal schedule, instead of only
 // once a day via GitHub Actions.
 
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
 import cron from 'node-cron';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { generateBrief, OUTPUT_PATH } from '../scripts/brief/run.mjs';
 import { checkBillingAlert } from '../scripts/brief/billing.mjs';
+import { generateBrief, OUTPUT_PATH } from '../scripts/brief/run.mjs';
 
 const PORT = 4700;
 const HOST = '127.0.0.1';

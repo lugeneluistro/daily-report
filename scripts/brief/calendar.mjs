@@ -3,7 +3,7 @@
 // problem the way an inbox has. Just list what's coming up, chronologically,
 // and flag what falls inside tonight's shift window.
 
-import { getAccessToken, configuredAccounts } from './googleAuth.mjs';
+import { getAccessToken, configuredAccounts, resolveAccountLabel } from './googleAuth.mjs';
 import { manilaNow } from './sources.mjs';
 
 const EVENTS_URL = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
@@ -38,8 +38,9 @@ function shiftWindowUtc() {
     return { startMs, endMs: startMs + 11 * 3600 * 1000 };
 }
 
-async function fetchAccountEvents(label, clientId, clientSecret, refreshToken, todayParts, shift) {
-    const accessToken = await getAccessToken(clientId, clientSecret, refreshToken);
+async function fetchAccountEvents(account, clientId, clientSecret, todayParts, shift) {
+    const accessToken = await getAccessToken(clientId, clientSecret, account.refreshToken);
+    const label = await resolveAccountLabel(account, accessToken);
     const timeMin = new Date().toISOString();
     const timeMax = new Date(Date.now() + LOOKAHEAD_HOURS * 3600 * 1000).toISOString();
 
@@ -73,15 +74,13 @@ export async function fetchCalendar() {
     const todayParts = manilaDateParts(new Date());
     const shift = shiftWindowUtc();
 
-    const settled = await Promise.allSettled(
-        config.accounts.map((a) => fetchAccountEvents(a.label, config.clientId, config.clientSecret, a.refreshToken, todayParts, shift)),
-    );
+    const settled = await Promise.allSettled(config.accounts.map((a) => fetchAccountEvents(a, config.clientId, config.clientSecret, todayParts, shift)));
 
     const data = [];
     const failed = [];
     settled.forEach((r, i) => {
         if (r.status === 'fulfilled') data.push(r.value);
-        else failed.push(`${config.accounts[i].label} (${r.reason.message})`);
+        else failed.push(`${config.accounts[i].label ?? config.accounts[i].fallbackLabel} (${r.reason.message})`);
     });
 
     if (data.length === 0) {

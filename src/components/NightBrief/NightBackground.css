@@ -1,0 +1,332 @@
+/*
+ * Deep-blue "network" background behind the Night Brief page — pure CSS, no JS,
+ * no image files.
+ *
+ * From back to front:
+ *   glows   big soft blue/cyan light that drifts around
+ *   mesh    two tiled layers of glowing nodes joined by fine lines, drifting in
+ *           opposite directions at different speeds for depth
+ *   bokeh   soft out-of-focus discs floating up and down
+ *   stars   two layers of tiny twinkling points
+ *
+ * Every layer loops seamlessly: a tiled layer is drawn larger than the screen
+ * by exactly one tile and slid by exactly one tile, so the end frame looks
+ * identical to the start frame. Only transform and opacity animate, so it all
+ * stays on the GPU. It is fixed and pointer-transparent, and stops moving for
+ * anyone who prefers reduced motion.
+ *
+ * The mesh, bokeh and star data live in NightBackground.generated.css, produced
+ * by scripts/night-bg/generate.mjs (npm run night-bg). Colours, sizes and speeds
+ * for everything else are here.
+ */
+
+.nb-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    /* Deep-blue wash under everything, so the page reads blue rather than black. */
+    background:
+        radial-gradient(110% 80% at 18% 0%, rgba(12, 58, 168, 0.5), rgba(12, 58, 168, 0) 62%),
+        radial-gradient(90% 80% at 100% 62%, rgba(6, 74, 160, 0.4), rgba(6, 74, 160, 0) 62%),
+        radial-gradient(80% 60% at 40% 110%, rgba(8, 92, 175, 0.32), rgba(8, 92, 175, 0) 62%);
+}
+
+/* ---- soft light ------------------------------------------------------ */
+
+.nb-glow {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform;
+}
+
+.nb-glow-a {
+    width: 78vmax;
+    height: 78vmax;
+    left: -26vmax;
+    top: -34vmax;
+    background: radial-gradient(closest-side, rgba(30, 100, 255, 0.46), rgba(30, 100, 255, 0) 70%);
+    animation: nb-drift-a 46s ease-in-out infinite alternate;
+}
+
+.nb-glow-b {
+    width: 64vmax;
+    height: 64vmax;
+    right: -22vmax;
+    top: 4vh;
+    background: radial-gradient(closest-side, rgba(0, 165, 255, 0.34), rgba(0, 165, 255, 0) 70%);
+    animation: nb-drift-b 58s ease-in-out infinite alternate;
+}
+
+.nb-glow-c {
+    width: 58vmax;
+    height: 58vmax;
+    left: 16vw;
+    bottom: -34vmax;
+    background: radial-gradient(closest-side, rgba(56, 189, 248, 0.36), rgba(56, 189, 248, 0) 70%);
+    animation: nb-drift-c 52s ease-in-out infinite alternate;
+}
+
+/* The bright burst, like the light spot in the reference image. */
+.nb-glow-d {
+    width: 30vmax;
+    height: 30vmax;
+    left: 4vw;
+    top: -10vh;
+    background: radial-gradient(closest-side, rgba(200, 235, 255, 0.42), rgba(120, 190, 255, 0.12) 45%, rgba(120, 190, 255, 0) 70%);
+    animation: nb-drift-d 40s ease-in-out infinite alternate;
+}
+
+@keyframes nb-drift-a {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(22vw, 16vh, 0) scale(1.18); }
+}
+
+@keyframes nb-drift-b {
+    from { transform: translate3d(0, 0, 0) scale(1.1); }
+    to { transform: translate3d(-24vw, 20vh, 0) scale(0.92); }
+}
+
+@keyframes nb-drift-c {
+    from { transform: translate3d(0, 0, 0) scale(0.95); }
+    to { transform: translate3d(-16vw, -14vh, 0) scale(1.2); }
+}
+
+@keyframes nb-drift-d {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(38vw, 26vh, 0) scale(1.35); }
+}
+
+/* ---- network mesh ---------------------------------------------------- */
+
+.nb-net {
+    position: absolute;
+    top: 0;
+    background-repeat: repeat;
+    will-change: transform, opacity;
+}
+
+/* Far layer: small, dim, slow — drifts up and to the left. */
+.nb-net-far {
+    left: 0;
+    width: calc(100vw + var(--nb-far-tile));
+    height: calc(100vh + var(--nb-far-tile));
+    animation:
+        nb-pan-far 160s linear infinite,
+        nb-breathe 11s ease-in-out infinite alternate;
+}
+
+/* Near layer: larger and brighter, drifts up and to the right. */
+.nb-net-near {
+    left: calc(var(--nb-near-tile) * -1);
+    width: calc(100vw + var(--nb-near-tile));
+    height: calc(100vh + var(--nb-near-tile));
+    animation:
+        nb-pan-near 100s linear infinite,
+        nb-breathe 8s ease-in-out 1.5s infinite alternate;
+}
+
+@keyframes nb-pan-far {
+    to { transform: translate3d(calc(var(--nb-far-tile) * -1), calc(var(--nb-far-tile) * -1), 0); }
+}
+
+@keyframes nb-pan-near {
+    to { transform: translate3d(var(--nb-near-tile), calc(var(--nb-near-tile) * -1), 0); }
+}
+
+/* Makes the nodes and lines swell and fade slowly, so the mesh feels alive. */
+@keyframes nb-breathe {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+}
+
+/* ---- bokeh ----------------------------------------------------------- */
+
+.nb-bokeh {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100vh + var(--nb-bokeh-tile));
+    background-repeat: repeat-y;
+    will-change: transform;
+}
+
+.nb-bokeh-a {
+    animation: nb-rise 80s linear infinite;
+}
+
+.nb-bokeh-b {
+    animation: nb-sink 125s linear infinite;
+}
+
+@keyframes nb-rise {
+    to { transform: translate3d(0, calc(var(--nb-bokeh-tile) * -1), 0); }
+}
+
+@keyframes nb-sink {
+    from { transform: translate3d(0, calc(var(--nb-bokeh-tile) * -1), 0); }
+    to { transform: translate3d(0, 0, 0); }
+}
+
+/* ---- stars ----------------------------------------------------------- */
+
+.nb-stars {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 50%;
+    background: transparent;
+    will-change: opacity;
+}
+
+.nb-stars-sm {
+    width: 1px;
+    height: 1px;
+    animation: nb-twinkle 7s ease-in-out infinite alternate;
+}
+
+.nb-stars-lg {
+    width: 2px;
+    height: 2px;
+    animation: nb-twinkle 11s ease-in-out 2s infinite alternate;
+}
+
+@keyframes nb-twinkle {
+    from { opacity: 0.2; }
+    to { opacity: 1; }
+}
+
+/* ---- cards ----------------------------------------------------------- */
+
+/*
+ * Frosted-glass panels: a see-through slate surface that blurs and dims the
+ * network moving behind it, so the text is always on a calm, even backdrop.
+ * Each card carries its own accent (--nb-accent-rgb, an "r g b" triplet) as a
+ * glowing hairline along the top edge, a soft coloured halo, and four small
+ * corner brackets — a HUD look, kept muted so it stays easy on the eyes.
+ *
+ * COST: backdrop-filter re-blurs the area behind every card each frame while the
+ * background animates. Fine on a recent GPU; if the page ever feels heavy, flat
+ * cards are one edit away — in the .nb-page block just below, set
+ *     --nb-glass: none;   --nb-card-alpha: 0.92;
+ * (it also switches itself off for anyone whose system asks for reduced
+ * transparency). The higher alpha matters when the glass is off: without the
+ * blur, the network would otherwise show through sharply behind the text.
+ */
+.nb-page {
+    --nb-glass: blur(14px) saturate(1.2) brightness(0.78);
+    --nb-card-alpha: 0.78;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .nb-page {
+        --nb-glass: none;
+        --nb-card-alpha: 0.92;
+    }
+}
+
+.nb-page .nb-card {
+    --nb-accent: rgb(var(--nb-accent-rgb, 126 156 224));
+    background-color: rgb(17 28 50 / var(--nb-card-alpha));
+    -webkit-backdrop-filter: var(--nb-glass);
+    backdrop-filter: var(--nb-glass);
+    border: 1px solid rgb(var(--nb-accent-rgb, 126 156 224) / 0.28);
+    box-shadow:
+        0 0 26px -10px rgb(var(--nb-accent-rgb, 126 156 224) / 0.4),
+        0 16px 30px -18px rgb(0 0 0 / 0.75),
+        inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+/* The glowing top edge: full strength at the left, fading out to the right. */
+.nb-page .nb-card::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    right: -1px;
+    height: 2px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(
+        90deg,
+        var(--nb-accent) 0%,
+        rgb(var(--nb-accent-rgb, 126 156 224) / 0.5) 55%,
+        rgb(var(--nb-accent-rgb, 126 156 224) / 0) 100%
+    );
+    box-shadow: 0 0 14px 1px rgb(var(--nb-accent-rgb, 126 156 224) / 0.5);
+    pointer-events: none;
+}
+
+/* Corner brackets. */
+.nb-page .nb-card::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    opacity: 0.4;
+    pointer-events: none;
+    background:
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 0 0 / 9px 1px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 0 0 / 1px 9px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 100% 0 / 9px 1px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 100% 0 / 1px 9px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 0 100% / 9px 1px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 0 100% / 1px 9px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 100% 100% / 9px 1px,
+        linear-gradient(var(--nb-accent), var(--nb-accent)) 100% 100% / 1px 9px;
+    background-repeat: no-repeat;
+}
+
+/* The work-from-home card: same card, washed with its verdict colour. */
+.nb-page .nb-card-tint {
+    background-image: linear-gradient(180deg, rgb(var(--nb-accent-rgb) / 0.21), rgb(var(--nb-accent-rgb) / 0.04) 70%);
+    border-left-color: rgb(var(--nb-accent-rgb) / 0.4);
+    border-right-color: rgb(var(--nb-accent-rgb) / 0.4);
+    border-bottom-color: rgb(var(--nb-accent-rgb) / 0.4);
+    box-shadow:
+        0 0 32px -6px rgb(var(--nb-accent-rgb) / 0.42),
+        0 16px 30px -18px rgb(0 0 0 / 0.75),
+        inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.nb-page .nb-card-tint::before {
+    animation: nb-edge-pulse 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes nb-edge-pulse {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
+}
+
+/* Outlined chip in the card's accent colour. */
+.nb-chip-accent {
+    border: 1.5px solid rgb(var(--nb-accent-rgb) / 0.65);
+    color: var(--nb-accent);
+}
+
+/* A checklist value that needs attention. */
+.nb-chip-flag {
+    background-color: rgb(240 180 94 / 0.18);
+    color: #f5c46b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nb-glow,
+    .nb-net,
+    .nb-bokeh,
+    .nb-stars,
+    .nb-page .nb-card-tint::before {
+        animation: none;
+    }
+}
+
+/* ---- numbers --------------------------------------------------------- */
+
+/* Prices, times, counts and percentages in a monospace face, so columns of
+ * figures line up and read like an instrument panel. The face is bundled
+ * (@fontsource), so it works offline. */
+.nb-num {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}

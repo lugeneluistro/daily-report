@@ -20,11 +20,22 @@ export interface BriefState {
     reload: () => Promise<void>;
 }
 
+/**
+ * A backend (or a committed brief.json) written before the current layout still
+ * emits the older shape, which the page can't draw. Reject it rather than
+ * render garbage, and say why — the usual fix is restarting the server.
+ */
+function acceptCurrent(json: BriefPayload, origin: string): BriefPayload | null {
+    if (typeof json?.verdict?.ncrSuspension === 'string' && Array.isArray(json.coins)) return json;
+    console.warn(`Ignoring an outdated brief from ${origin}. A local server started before the latest update needs a restart.`);
+    return null;
+}
+
 async function fetchLocal(path: string, timeoutMs: number, init?: RequestInit): Promise<BriefPayload | null> {
     try {
         const res = await fetch(`${LOCAL_API}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
         if (!res.ok) return null;
-        return (await res.json()) as BriefPayload;
+        return acceptCurrent((await res.json()) as BriefPayload, 'the local server');
     } catch {
         return null;
     }
@@ -34,7 +45,7 @@ async function fetchStatic(): Promise<BriefPayload | null> {
     try {
         const res = await fetch('/data/brief.json', { cache: 'no-store' });
         if (!res.ok) return null;
-        return (await res.json()) as BriefPayload;
+        return acceptCurrent((await res.json()) as BriefPayload, '/data/brief.json');
     } catch {
         return null;
     }

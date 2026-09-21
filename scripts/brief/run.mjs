@@ -8,7 +8,7 @@ import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds } from './sources.mjs';
+import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds, fetchSuspensionNews } from './sources.mjs';
 import { fetchGmail } from './gmail.mjs';
 import { fetchCalendar } from './calendar.mjs';
 import { fetchClaimekBilling, checkBillingAlert } from './billing.mjs';
@@ -22,35 +22,29 @@ const WEEKDAY_LABEL = { Sun: 'Sun', Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Th
 const MONTH_LABEL = { 1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec' };
 
 /** SKILL.md §2: the call binds Mon-Wed, and Thu before 8PM. Every other run
- * is advisory only. */
-function liveStatus(clock) {
+ * (Thu night, Fri, weekends) is advisory only. */
+function callBinds(clock) {
     const day = WEEKDAY_INDEX[clock.weekday];
-    if (day >= 1 && day <= 3) return { live: true };
-    if (day === 4) return clock.hour < 20 ? { live: true } : { live: false, note: 'the shift has already started and the next office night isn\'t until Monday' };
-    if (day === 5) return { live: false, note: 'Friday is already a work-from-home day' };
-    return { live: false, note: 'no team to send home tonight, and Gino is in Calamba' };
+    if (day >= 1 && day <= 3) return true;
+    return day === 4 && clock.hour < 20;
 }
 
-function buildWearLine(weather) {
-    const { minTemp, mentionRainGear } = weather;
-    let wear;
-    if (minTemp >= 26) wear = 'light, it stays warm';
-    else if (minTemp >= 24) wear = 'normal';
-    else wear = 'take a jacket';
-    return `Low ${minTemp}°C · ${wear}${mentionRainGear ? ' · bring rain gear' : ''}`;
-}
+/** Rule from the report-today skill (§1): a low of 23C or below makes a jacket
+ * or sweatshirt worth it. */
+const JACKET_BELOW_C = 24;
 
 /** Runs every fetcher, makes the LLM call, and returns the brief payload.
  * Pure — never touches the filesystem. */
 export async function generateBrief() {
     const clock = manilaNow();
-    const { live, note: advisoryNote } = liveStatus(clock);
+    const live = callBinds(clock);
 
-    const [weatherResult, coinsResult, pagasaResult, feedsResult, gmailResult, calendarResult, billingResult] = await Promise.all([
+    const [weatherResult, coinsResult, pagasaResult, feedsResult, suspensionResult, gmailResult, calendarResult, billingResult] = await Promise.all([
         fetchWeather(),
         fetchCoins(),
         fetchPagasa(),
         fetchFeeds(),
+        fetchSuspensionNews(),
         fetchGmail(),
         fetchCalendar(),
         fetchClaimekBilling(),
@@ -63,6 +57,8 @@ export async function generateBrief() {
     const pagasaFailedPages = pagasaResult.ok ? pagasaResult.partialFailure ?? [] : ['severe-weather-bulletin', 'weather-advisory'];
     const feedsFailedSources = feedsResult.ok ? feedsResult.partialFailure ?? [] : ['all feeds'];
     if (!feedsResult.ok) deterministicGaps.push(`news sources failed (${feedsResult.reason})`);
+    // A failed search must read as "could not check", never as "no suspension".
+    if (!suspensionResult.ok) deterministicGaps.push(`government work-suspension search failed (${suspensionResult.reason})`);
 
     // "Not configured" is not a gap — it's an expected absence until secrets are set.
     // A configured account that fails to fetch is a real gap.
@@ -83,41 +79,38 @@ export async function generateBrief() {
         weather: weatherResult.ok ? weatherResult.data : null,
         pagasa: pagasaResult.ok ? pagasaResult.data : null,
         feeds: feedsResult.ok ? feedsResult.data : [],
+        suspension: { searched: suspensionResult.ok, candidates: suspensionResult.ok ? suspensionResult.data : [] },
         pagasaFailedPages,
         feedsFailedSources,
         emailAccounts,
     });
 
-    // Crypto: drop every coin under the 500% gate. An empty array means the
-    // card is absent, matching the skill's "drop the card rather than
-    // rendering an empty one" rule.
-    const coins = coinsResult.ok ? coinsResult.data.filter((c) => c.clearsGate) : [];
+    // Crypto: always show all three tracked coins. `clearsGate` (500%+ in 24h)
+    // only decides which one gets highlighted. Empty only if the price fetch failed.
+    const coins = coinsResult.ok ? coinsResult.data : [];
 
     const weather = weatherResult.ok ? weatherResult.data : null;
-    const wearLine = weather ? buildWearLine(weather) : null;
 
-    const reason = live ? judged.wfh.reason : `${judged.wfh.reason} Advisory only — ${advisoryNote}.`;
-
+    // The dashboard shows this as a short checklist, not a paragraph.
     const verdict = {
         call: judged.wfh.call,
-        title: judged.wfh.title,
-        signal: judged.wfh.signal,
-        binding: live ? `${WEEKDAY_LABEL[clock.weekday]} · the call binds tonight` : `${WEEKDAY_LABEL[clock.weekday]} · advisory only`,
-        reason,
-        chips: [weather ? `Rain peaks ${weather.peakRain.percent}% at ${weather.peakRain.hourLabel}` : null, wearLine].filter(Boolean),
+        ncrSuspension: judged.wfh.ncrSuspension,
+        cyclone: judged.wfh.cyclone,
+        rainfall: judged.wfh.rainfall,
+        jacket: weather ? (weather.minTemp < JACKET_BELOW_C ? 'Recommended' : 'Not recommended') : null,
+        lowTempC: weather ? weather.minTemp : null,
         deadline: live ? 'Decide by 6PM' : 'Advisory only',
     };
 
+    // Gasoline only. The news often reports the weekly change without the pump
+    // price, so either one is enough to show the row.
     const fuel = judged.fuel.found
         ? {
-              diesel: judged.fuel.diesel
-                  ? { label: 'Diesel', price: judged.fuel.diesel, delta: judged.fuel.dieselDelta ?? '', rising: judged.fuel.dieselRising ?? false }
-                  : null,
-              gasoline: judged.fuel.gasoline
-                  ? { label: 'Gasoline', price: judged.fuel.gasoline, delta: judged.fuel.gasolineDelta ?? '', rising: judged.fuel.gasolineRising ?? false }
-                  : null,
+              gasoline:
+                  judged.fuel.gasoline || judged.fuel.gasolineDelta
+                      ? { label: 'Gasoline', price: judged.fuel.gasoline, delta: judged.fuel.gasolineDelta ?? '', rising: judged.fuel.gasolineRising ?? false }
+                      : null,
               call: judged.fuel.call,
-              note: judged.fuel.note,
           }
         : null;
 

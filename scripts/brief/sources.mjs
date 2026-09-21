@@ -57,11 +57,10 @@ export async function fetchWeather() {
         // Before noon means we're still inside last night's window, which
         // started 8PM yesterday. Otherwise tonight's window starts 8PM today.
         const windowStart = now.hour < 12 ? addDays(now, -1) : now;
-        const lastNightStart = addDays(windowStart, -1);
 
         const url =
             `https://api.open-meteo.com/v1/forecast?latitude=${MAKATI.latitude}&longitude=${MAKATI.longitude}` +
-            `&hourly=temperature_2m,precipitation_probability,precipitation&timezone=Asia/Manila&past_days=2&forecast_days=2`;
+            `&hourly=temperature_2m,precipitation_probability,precipitation&timezone=Asia/Manila&past_days=1&forecast_days=2`;
 
         const res = await fetch(url);
         if (!res.ok) return { ok: false, reason: `Open-Meteo returned ${res.status}` };
@@ -77,13 +76,10 @@ export async function fetchWeather() {
 
         const weatherHours = HOURS_8PM_TO_7AM.map((hour) => {
             const day = hour >= 20 ? windowStart : addDays(windowStart, 1);
-            const lastDay = hour >= 20 ? lastNightStart : addDays(lastNightStart, 1);
             const i = indexOf(day, hour);
-            const iLast = indexOf(lastDay, hour);
             return {
                 label: labelForHour(hour),
                 tonight: i >= 0 ? Math.round(rainChance[i]) : 0,
-                lastNight: iLast >= 0 ? Math.round(rainChance[iLast]) : 0,
                 temp: i >= 0 ? Math.round(temps[i]) : null,
                 mm: i >= 0 ? rainMm[i] : 0,
             };
@@ -95,17 +91,16 @@ export async function fetchWeather() {
 
         const minTemp = Math.min(...weatherHours.map((h) => h.temp));
         const peak = weatherHours.reduce((best, h) => (h.tonight > best.tonight ? h : best), weatherHours[0]);
-        const hoursAtOrAbove60 = weatherHours.filter((h) => h.tonight >= 60).length;
         const maxPrecipMm = Math.max(...weatherHours.map((h) => h.mm));
 
         return {
             ok: true,
             data: {
-                // Drop the mm/h helper field — the card only ever renders tonight/lastNight/temp.
-                weatherHours: weatherHours.map(({ mm, ...h }) => h),
+                // The chart only renders the hourly rain chance; temp and mm/h are
+                // used above (jacket advice, WFH threshold) and stay internal.
+                weatherHours: weatherHours.map(({ label, tonight }) => ({ label, tonight })),
                 minTemp,
                 peakRain: { percent: peak.tonight, hourLabel: peak.label },
-                mentionRainGear: hoursAtOrAbove60 > 0,
                 windowStartedYesterday: now.hour < 12,
                 // For the WFH rainfall-threshold rule (mm/h, not the chart's % chance).
                 maxPrecipMm: Math.round(maxPrecipMm * 10) / 10,
@@ -117,8 +112,8 @@ export async function fetchWeather() {
     }
 }
 
-/** XRP, LTC, LINK — 24h change plus a downsampled sparkline. Every coin is
- * returned; run.mjs drops the ones under the 500% gate. */
+/** XRP, LTC, LINK — 24h change plus a downsampled sparkline. All three are
+ * always returned; `clearsGate` just marks a 500%+ spike for highlighting. */
 export async function fetchCoins() {
     try {
         const ids = ['ripple', 'litecoin', 'chainlink'];
@@ -133,6 +128,9 @@ export async function fetchCoins() {
             const step = (arr.length - 1) / (n - 1);
             return Array.from({ length: n }, (_, i) => arr[Math.round(i * step)]);
         };
+
+        // CoinGecko returns market-cap order; keep the card in a stable XRP, LTC, LINK order.
+        json.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 
         const coins = json.map((c) => {
             const [ticker, name] = NAMES[c.id] ?? [c.symbol.toUpperCase(), c.name];
@@ -193,12 +191,25 @@ export async function fetchPagasa() {
     return { ok: true, data, partialFailure: failed.length ? failed : null };
 }
 
+// `limit` caps how many of a feed's newest items reach the model (default 12), which
+// keeps the prompt small now that there are more feeds. Grouped by the card they feed.
 const FEEDS = [
+    // Philippines + fuel + suspensions
     { source: 'GMA News (Nation)', url: 'https://data.gmanetwork.com/gno/rss/news/nation/feed.xml' },
     { source: 'GMA News (Metro)', url: 'https://data.gmanetwork.com/gno/rss/news/metro/feed.xml' },
     { source: 'GMA News (Economy)', url: 'https://data.gmanetwork.com/gno/rss/money/economy/feed.xml' },
+    { source: 'Philippine Daily Inquirer', url: 'https://newsinfo.inquirer.net/feed', limit: 10 },
+    { source: 'Philstar', url: 'https://www.philstar.com/rss/headlines', limit: 8 },
+    { source: 'BusinessWorld', url: 'https://www.bworldonline.com/feed/', limit: 8 },
+    // AI: Claude first, then the other labs and tooling. Only one hnrss.org request per run:
+    // it answers 429 to more than a few, and a dead feed just drops out of the list.
     { source: 'Hacker News (Claude/Anthropic)', url: 'https://hnrss.org/newest?q=Claude+OR+Anthropic&count=15' },
+    { source: 'Claude Code releases (GitHub)', url: 'https://github.com/anthropics/claude-code/releases.atom', limit: 4 },
     { source: 'Simon Willison', url: 'https://simonwillison.net/atom/everything/' },
+    { source: 'The Verge (AI)', url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', limit: 6 },
+    { source: 'OpenAI news', url: 'https://openai.com/news/rss.xml', limit: 6 },
+    { source: 'Google DeepMind blog', url: 'https://deepmind.google/blog/rss.xml', limit: 6 },
+    { source: 'Ars Technica (AI)', url: 'https://arstechnica.com/ai/feed/', limit: 6 },
 ];
 
 /** RSS/Atom only — cheap, keyless, and gives the LLM candidate headlines
@@ -208,7 +219,9 @@ export async function fetchFeeds() {
     const settled = await Promise.allSettled(
         FEEDS.map(async (f) => {
             const feed = await rssParser.parseURL(f.url);
-            return (feed.items ?? []).slice(0, 12).map((item) => ({
+            // Newest first, whatever order the feed came in — some (OpenAI's) list thousands of items.
+            const dated = (item) => new Date(item.isoDate ?? item.pubDate ?? 0).getTime() || 0;
+            return [...(feed.items ?? [])].sort((a, b) => dated(b) - dated(a)).slice(0, f.limit ?? 12).map((item) => ({
                 source: f.source,
                 title: item.title ?? '',
                 href: item.link ?? '',
@@ -225,4 +238,62 @@ export async function fetchFeeds() {
         return { ok: false, reason: 'All news feeds unreachable' };
     }
     return { ok: true, data: items, partialFailure: failedFeeds.length ? failedFeeds : null };
+}
+
+const SUSPENSION_QUERIES = [
+    'work suspension government offices Metro Manila when:7d',
+    'suspension of work in government offices when:3d',
+    'Malacañang suspends work classes NCR when:3d',
+];
+const SUSPENSION_MAX_AGE_DAYS = 8;
+const SUSPENSION_MAX_ITEMS = 15;
+
+// Google's matching is fuzzy and pads a quiet week with unrelated stories from
+// anywhere. A loose keyword screen — Philippine-government wording, or a
+// suspension word next to a work word — keeps that noise from crowding real
+// headlines out of the capped list. The model still makes the actual call.
+const SUSPENSION_SCOPE = /\b(malaca[nñ]ang|palace|ncr|metro manila|makati|marcos|gov['’]?t offices?|government offices?|state workers|civil service|walang pasok)\b/i;
+const SUSPENSION_WORD = /suspen|shorten|half[- ]?day|no work|cancel|walang pasok|work[- ]from[- ]home|\bwfh\b/i;
+const SUSPENSION_WORK_WORD = /\b(work|offices?|classes|gov['’]?t|government)\b/i;
+const looksLikeSuspension = (title) => SUSPENSION_SCOPE.test(title) || (SUSPENSION_WORD.test(title) && SUSPENSION_WORK_WORD.test(title));
+
+/** Google News search as RSS (keyless), aimed at one question: is government work
+ * suspended in NCR? The general feeds above only carry the newest dozen headlines,
+ * so a suspension can be missing from them; this searches for it. Titles arrive
+ * as "Headline - Outlet". An empty list with ok:true means the search ran and
+ * found nothing — different from ok:false, where it could not run. */
+export async function fetchSuspensionNews() {
+    const settled = await Promise.allSettled(
+        SUSPENSION_QUERIES.map(async (query) => {
+            const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-PH&gl=PH&ceid=PH:en`;
+            const feed = await rssParser.parseURL(url);
+            return feed.items ?? [];
+        }),
+    );
+
+    if (settled.every((r) => r.status === 'rejected')) {
+        return { ok: false, reason: 'Google News search unreachable' };
+    }
+
+    const oldest = Date.now() - SUSPENSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const seen = new Set();
+    const items = [];
+    for (const result of settled) {
+        if (result.status !== 'fulfilled') continue;
+        for (const item of result.value) {
+            const raw = (item.title ?? '').trim();
+            const cut = raw.lastIndexOf(' - ');
+            const title = cut > 0 ? raw.slice(0, cut) : raw;
+            const published = item.isoDate ?? item.pubDate ?? null;
+            const key = title.toLowerCase();
+            if (!title || seen.has(key) || !looksLikeSuspension(title)) continue;
+            if (published && new Date(published).getTime() < oldest) continue;
+            seen.add(key);
+            items.push({ source: cut > 0 ? raw.slice(cut + 3) : 'Google News', title, published });
+        }
+    }
+
+    items.sort((a, b) => new Date(b.published ?? 0).getTime() - new Date(a.published ?? 0).getTime());
+    const failed = settled.filter((r) => r.status === 'rejected').length;
+    return { ok: true, data: items.slice(0, SUSPENSION_MAX_ITEMS), partialFailure: failed ? [`${failed} of ${SUSPENSION_QUERIES.length} suspension searches`] : null };
 }

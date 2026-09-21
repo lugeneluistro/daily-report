@@ -5,39 +5,45 @@ interface CalendarAccountsProps {
     accounts: CalendarAccountSummary[];
 }
 
-/** One column per Google account: the next few events over roughly the next
- * 36 hours, chronological, with a "Shift" badge on anything inside tonight's
- * 8PM-7AM window. */
-const CalendarAccounts: FC<CalendarAccountsProps> = ({ accounts }) => (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {accounts.map((acct) => (
-            <div key={acct.label}>
-                <div className="mb-2.5 text-[13px] font-extrabold uppercase tracking-[0.08em] text-[#888ea8]">{acct.label}</div>
+const MAX_PER_ACCOUNT = 5;
 
-                {acct.events.length === 0 ? (
-                    <div className="text-xs text-[#5f6b85]">Nothing on the calendar for the next day and a half.</div>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {acct.events.map((event) => (
-                            <div key={event.id} className="flex items-start gap-3 rounded-md border border-[#1b2e4b] bg-[#101a2d] px-3.5 py-3">
-                                <span className="mt-0.5 flex-none whitespace-nowrap text-[12px] font-bold tabular-nums text-[#a8bcff]">{event.startLabel}</span>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <span className="text-[13.5px] font-bold leading-snug text-white-light">{event.title}</span>
-                                        {event.duringShift && (
-                                            <span className="flex-none whitespace-nowrap rounded-[3px] bg-primary/[0.16] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.1em] text-[#a8bcff]">
-                                                Shift
-                                            </span>
-                                        )}
-                                    </div>
-                                    {event.location && <div className="mt-0.5 truncate text-xs text-[#888ea8]">{event.location}</div>}
+/** Compact reminder list, one column per Google account: a single line per
+ * event over roughly the next 36 hours, with a "Shift" badge on anything
+ * inside tonight's 8PM-7AM window. */
+const CalendarAccounts: FC<CalendarAccountsProps> = ({ accounts }) => (
+    <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+        {accounts.map((acct) => {
+            const shown = acct.events.slice(0, MAX_PER_ACCOUNT);
+            const hidden = acct.events.length - shown.length;
+
+            return (
+                <div key={acct.label} className="min-w-0">
+                    <div className="mb-1 truncate text-[12.5px] font-semibold text-[#9aa8c4]">{acct.label}</div>
+
+                    {shown.length === 0 ? (
+                        <div className="py-1 text-xs text-[#8794b3]">Nothing on the calendar for the next day and a half.</div>
+                    ) : (
+                        <div>
+                            {shown.map((event) => (
+                                <div key={event.id} className="flex items-baseline gap-2.5 border-b border-[#2a3f63]/60 py-1.5 last:border-b-0">
+                                    <span className="w-[128px] flex-none whitespace-nowrap text-[11.5px] font-bold nb-num text-[#a8bcff]">{event.startLabel}</span>
+                                    <span className="min-w-0 flex-1 truncate text-[13px] text-white-light">
+                                        {event.title}
+                                        {event.location && <span className="text-[#8794b3]"> &middot; {event.location}</span>}
+                                    </span>
+                                    {event.duringShift && (
+                                        <span className="flex-none whitespace-nowrap rounded-[3px] bg-primary/[0.16] px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.1em] text-[#a8bcff]">
+                                            Shift
+                                        </span>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        ))}
+                            ))}
+                            {hidden > 0 && <div className="pt-1 text-[11px] text-[#8794b3]">+{hidden} more</div>}
+                        </div>
+                    )}
+                </div>
+            );
+        })}
     </div>
 );
 

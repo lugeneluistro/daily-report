@@ -1,7 +1,7 @@
 // Gmail fetching for the email card. No LLM here — this only returns raw
 // unread counts and candidate messages for llm.mjs to filter.
 
-import { getAccessToken, configuredAccounts } from './googleAuth.mjs';
+import { getAccessToken, configuredAccounts, resolveAccountLabel } from './googleAuth.mjs';
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 const CANDIDATE_LIMIT = 10;
@@ -14,8 +14,9 @@ async function gmailGet(path, accessToken) {
 
 const headerValue = (headers, name) => headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
 
-async function fetchAccount(label, clientId, clientSecret, refreshToken) {
-    const accessToken = await getAccessToken(clientId, clientSecret, refreshToken);
+async function fetchAccount(account, clientId, clientSecret) {
+    const accessToken = await getAccessToken(clientId, clientSecret, account.refreshToken);
+    const label = await resolveAccountLabel(account, accessToken);
 
     const [unreadLabel, list] = await Promise.all([
         gmailGet('/labels/UNREAD', accessToken),
@@ -49,13 +50,13 @@ export async function fetchGmail() {
     const config = configuredAccounts();
     if (!config) return { ok: false, reason: 'no Gmail accounts configured' };
 
-    const settled = await Promise.allSettled(config.accounts.map((a) => fetchAccount(a.label, config.clientId, config.clientSecret, a.refreshToken)));
+    const settled = await Promise.allSettled(config.accounts.map((a) => fetchAccount(a, config.clientId, config.clientSecret)));
 
     const data = [];
     const failed = [];
     settled.forEach((r, i) => {
         if (r.status === 'fulfilled') data.push(r.value);
-        else failed.push(`${config.accounts[i].label} (${r.reason.message})`);
+        else failed.push(`${config.accounts[i].label ?? config.accounts[i].fallbackLabel} (${r.reason.message})`);
     });
 
     if (data.length === 0) {

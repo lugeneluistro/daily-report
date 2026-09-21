@@ -87,4 +87,4 @@ if (!tokens.refresh_token) {
 
 console.log('\nSave this as a GitHub Actions secret (GMAIL_ACCOUNT_1_REFRESH_TOKEN or GMAIL_ACCOUNT_2_REFRESH_TOKEN — same token powers both the Email and Calendar cards):\n');
 console.log(tokens.refresh_token);
-console.log('\nAlso set a matching GMAIL_ACCOUNT_{1,2}_LABEL secret (e.g. "Personal" or "Work") so the cards know which account is which.\n');
+console.log('\nThe cards label each account with its real email address automatically. GMAIL_ACCOUNT_{1,2}_LABEL is optional — only set it to override that (e.g. "Personal").\n');
