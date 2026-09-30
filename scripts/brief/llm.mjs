@@ -1,8 +1,7 @@
 // The one LLM call per run. Everything fetchable was already fetched by
-// sources.mjs/gmail.mjs — this only asks for the parts that are genuinely
-// judgment: the NCR work-suspension call, extracting this week's fuel
-// adjustment out of the news feeds, filtering/ranking the AI and
-// Philippines news, and surfacing which unread emails look worth attention.
+// sources.mjs — this only asks for the parts that are genuinely judgment: the
+// NCR work-suspension call, extracting this week's fuel adjustment out of the
+// news feeds, and filtering/ranking the AI and Philippines news.
 
 import Anthropic from '@anthropic-ai/sdk';
 // zodOutputFormat requires schemas built from the zod/v4 subpath specifically
@@ -27,8 +26,17 @@ const BriefSchema = z.object({
     wfh: z.object({
         call: z.enum(['office', 'watch', 'wfh']),
         ncrSuspension: z.enum(['yes', 'no', 'unknown']).describe('"yes" if a government work suspension covering NCR or Makati, effective today or tomorrow, was found; "no" if it was searched for and none applies; "unknown" only if governmentWorkSuspension.searched is false and newsCandidates has no such headline either.'),
-        cyclone: z.string().describe('Two to five words. "None" when PAGASA reports no active tropical cyclone; otherwise the status, e.g. "Signal No. 2 over NCR" or "TS Ada, no NCR signal". "Unknown" if the bulletin text was null.'),
-        rainfall: z.string().describe('Two to five words. "None" when there is no active named rainfall warning over NCR and no window hour at 15mm/h+; otherwise the warning, e.g. "Orange until 2AM", or "Heavy rain likely" if only the computed intensity triggered it. "Unknown" if neither source was available.'),
+        cyclone: z.object({
+            status: z.enum(['none', 'active', 'unknown']).describe('"none" when the PAGASA severe-weather-bulletin says there is no active tropical cyclone; "active" when it lists one; "unknown" if the bulletin text was null (the fetch failed).'),
+            localName: z.string().nullable().describe('The PAGASA local name, e.g. "Ada" — normally in quotes in the bulletin heading. Null unless status is "active", or if PAGASA has not given it a local name.'),
+            internationalName: z.string().nullable().describe('The international name, e.g. "Kalmaegi" — normally in parentheses after the local name or labelled "International name". Null unless status is "active", or if the bulletin does not state one. Never guess a name.'),
+            category: z.string().nullable().describe('PAGASA\'s classification as written: "Tropical Depression", "Tropical Storm", "Severe Tropical Storm", "Typhoon" or "Super Typhoon". Null unless status is "active".'),
+            ncrSignal: z.number().nullable().describe('The Tropical Cyclone Wind Signal number (1-5) in effect over NCR / Metro Manila, or null if none is raised over it (or status is not "active").'),
+        }),
+        rainfall: z.object({
+            level: z.enum(['none', 'yellow', 'orange', 'red', 'unknown']).describe('The colour of the PAGASA rainfall warning active over NCR / Metro Manila, read from the weather-advisory text. "none" if there is none — including when only the computed rainfall intensity triggered "watch"; the dashboard notes that itself. "unknown" only if the advisory text was null AND weather was null.'),
+            until: z.string().nullable().describe('When that warning is valid until, e.g. "2AM". Null if the level is "none" or no end time is stated.'),
+        }),
     }),
     fuel: z
         .object({
@@ -41,25 +49,6 @@ const BriefSchema = z.object({
         .describe('Gasoline only, extracted from the news candidates below, not a live DOE feed.'),
     phNews: z.array(NewsItemSchema).max(5).describe('The top five Philippines items, most important to Gino first.'),
     aiNews: z.array(NewsItemSchema).max(5).describe('The top five AI items: one or two about Claude/Anthropic first, then the most important news on other AI.'),
-    email: z
-        .array(
-            z.object({
-                label: z.string().describe('Copied verbatim from the matching account in emailAccounts.'),
-                unreadCount: z.number().describe('Copied verbatim from the matching account — never recomputed.'),
-                items: z
-                    .array(
-                        z.object({
-                            id: z.string().describe('Copied verbatim from a candidate id — never invented.'),
-                            from: z.string(),
-                            subject: z.string(),
-                            summary: z.string().describe('One short line on why this was surfaced, or a plain restatement of the snippet.'),
-                            important: z.boolean().describe('True only if it looks time-sensitive or needs a reply this shift.'),
-                        }),
-                    )
-                    .max(5),
-            }),
-        )
-        .describe('One entry per account in emailAccounts, same order, even if items ends up empty.'),
     gaps: z.array(z.string()).describe('Judgment-based gaps only, e.g. "fuel unconfirmed for this week". Do not report an absent crypto card or a normal weekend as a gap.'),
 });
 
@@ -75,7 +64,9 @@ Exactly one of "office" / "watch" / "wfh". Check in order — only the first two
 2. A tropical cyclone wind signal over NCR/Metro Manila — read the PAGASA severe-weather-bulletin text. "No active tropical cyclone" means this step is done, no signal. If that text is null (the fetch failed), you cannot confirm either way — do not assume "no signal"; note "PAGASA severe weather bulletin unreachable" in gaps and fall through to step 3.
 3. Otherwise use the rainfall facts already computed: PAGASA thresholds are yellow 7.5-15mm/h, orange 15-30, red above 30. You are told whether any hour in tonight's window hit 15mm/h+, and given the PAGASA weather-advisory text for any active named rainfall warning over NCR. Either one means "watch". Below that, "office". If the weather-advisory text is null, rely on the mm/h figure alone and note "PAGASA weather advisory unreachable" in gaps.
 
-Report each of the three checks as its own short field (ncrSuspension, cyclone, rainfall) — the dashboard shows them as a checklist, so no sentences and no weather summary. The call must be consistent with them.
+Report the checks as fields (ncrSuspension, cyclone, rainfall) — the dashboard shows them as a checklist, so fill them factually, with no sentences and no weather summary. The call must be consistent with them.
+
+When a cyclone is active, read both of its names from the bulletin heading: PAGASA's local name is normally in quotes (e.g. "Ada") and the international name follows in parentheses or is labelled "International name" (e.g. Kalmaegi). Copy them as written, capitalised as a name, without the quotes or brackets. A storm outside the Philippine area of responsibility may have only an international name; give what the bulletin states and leave the other null. For ncrSignal, look for Metro Manila / NCR in the list of areas under each wind signal.
 
 ## When sources are missing
 - If newsCandidates is empty, you cannot produce phNews or aiNews — return empty arrays for both and add "PH news sources failed" / "AI news sources failed" to gaps as appropriate.
@@ -100,16 +91,13 @@ Return fewer than five only if fewer genuinely clear the bar — never pad with 
 ## Philippines (top 5)
 Five items, ordered by how much they matter to Gino. Lead with genuinely good news: economy, infrastructure, science, tech, education, sports, culture. Include a negative item only if it changes what Gino does or needs to be aware of (transport strike, major outage, health advisory, security incident, a peso/economic move touching salary or savings) — mark those alert:true, and no more than two of them. Never pad with trivia; a real alert beats a filler feel-good item, and a genuine good-news item beats a marginal alert.
 
-## Email (per account in emailAccounts)
-For each account, you're given its real unreadCount and up to 10 candidate unread messages (id, from, subject, snippet). Pick up to 5 worth surfacing — prioritize ones that look time-sensitive, from a real person rather than a list/marketing/no-reply sender, or reference something actionable. Set important:true only for ones that look like they genuinely need attention this shift (someone waiting on a reply, a deadline, an urgent-sounding subject); everything else you choose to surface is important:false. Copy id, from, and subject verbatim from the candidate — never invent one, and never surface a message not in the candidate list. unreadCount is copied from the input as given, not recomputed from how many candidates you saw (the candidate list is capped at 10 and may undercount). If an account has zero candidates, still include it in the output with an empty items array and its given unreadCount. Do not add a gap for an account with nothing worth surfacing — that is a normal outcome, not a failure.
-
 ## Rules for every news item
 - highlight is a short phrase pulled from the title to render in accent colour, or null — don't force one.
 - tone: success (good news), warning (negative/alert), info (neutral/factual), primary/secondary (AI card only, vary between items).
 - href must be copied verbatim from the candidate's own link — never invented, never a homepage substituted for the real article.
 - gaps: only real search/fetch failures or "could not find X after looking" — never list an outcome that is simply absent-because-nothing-happened (e.g. no coin above the crypto gate, a normal weekend with no fuel news yet).`;
 
-export async function judgeBrief({ manilaClock, weather, pagasa, feeds, suspension, pagasaFailedPages, feedsFailedSources, emailAccounts }) {
+export async function judgeBrief({ manilaClock, weather, pagasa, feeds, suspension, pagasaFailedPages, feedsFailedSources }) {
     const client = new Anthropic();
 
     const payload = {
@@ -128,7 +116,6 @@ export async function judgeBrief({ manilaClock, weather, pagasa, feeds, suspensi
         governmentWorkSuspension: suspension ?? { searched: false, candidates: [] },
         newsCandidates: feeds ?? [],
         feedsUnreachable: feedsFailedSources ?? [],
-        emailAccounts: emailAccounts ?? [],
     };
 
     const response = await client.messages.parse({

@@ -9,11 +9,20 @@
   "verdict": {
     "call": "watch",
     "ncrSuspension": "no",
-    "cyclone": "None",
-    "rainfall": "Orange until 2AM",
+    "cyclone": {
+      "status": "none",
+      "localName": null,
+      "internationalName": null,
+      "category": null,
+      "ncrSignal": null
+    },
+    "rainfall": {
+      "level": "orange",
+      "until": "2AM",
+      "heavyRainLikely": false
+    },
     "jacket": "Not recommended",
-    "lowTempC": 25,
-    "deadline": "Decide by 6PM"
+    "lowTempC": 25
   },
   "weatherHours": [
     {
@@ -238,81 +247,6 @@
       "tone": "info"
     }
   ],
-  "email": [
-    {
-      "label": "lugeneluistro@gmail.com",
-      "unreadCount": 12,
-      "items": [
-        {
-          "id": "email-1",
-          "from": "Landlord",
-          "subject": "Re: Lease renewal",
-          "summary": "Waiting on your reply before Friday to lock in the renewed rate.",
-          "important": true
-        },
-        {
-          "id": "email-2",
-          "from": "BPI Alerts",
-          "subject": "Your statement is ready",
-          "summary": "Routine statement notice, nothing time-sensitive.",
-          "important": false
-        }
-      ]
-    },
-    {
-      "label": "lugene12@gmail.com",
-      "unreadCount": 4,
-      "items": [
-        {
-          "id": "email-3",
-          "from": "Maria (PM)",
-          "subject": "Sprint review moved to tomorrow AM",
-          "summary": "Meeting was pulled forward — check before the shift starts.",
-          "important": true
-        }
-      ]
-    }
-  ],
-  "calendar": [
-    {
-      "label": "lugeneluistro@gmail.com",
-      "events": [
-        {
-          "id": "cal-1",
-          "title": "Gym",
-          "startLabel": "9:30 PM",
-          "location": null,
-          "duringShift": true
-        },
-        {
-          "id": "cal-2",
-          "title": "Dentist — Dr. Reyes",
-          "startLabel": "Tomorrow 2:00 PM",
-          "location": "Makati Medical Center",
-          "duringShift": false
-        }
-      ]
-    },
-    {
-      "label": "lugene12@gmail.com",
-      "events": [
-        {
-          "id": "cal-3",
-          "title": "Sprint review",
-          "startLabel": "Tomorrow 9:00 AM",
-          "location": "Google Meet",
-          "duringShift": false
-        },
-        {
-          "id": "cal-4",
-          "title": "On-call handoff",
-          "startLabel": "11:00 PM",
-          "location": null,
-          "duringShift": true
-        }
-      ]
-    }
-  ],
   "claimekBilling": {
     "monthLabel": "Sep 2026",
     "providers": [
@@ -354,7 +288,7 @@
           },
           {
             "name": "CloudWatch",
-            "amount": 13.0
+            "amount": 13
           }
         ]
       }

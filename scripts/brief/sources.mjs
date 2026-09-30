@@ -162,14 +162,23 @@ const stripHtml = (html) =>
         .replace(/\s+/g, ' ')
         .trim();
 
+// A PAGASA page is ~10k characters of navigation menu followed by the actual
+// bulletin, so the head of the text is all menu. The content sits in the one
+// container carrying this class; if PAGASA ever renames it, fall back to the
+// tail of the page rather than the head.
+const PAGASA_CONTENT_MARKER = 'container-fluid container-space';
+
 async function fetchPage(url, maxChars) {
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (night-brief-bot)' } });
     if (!res.ok) throw new Error(`${url} returned ${res.status}`);
     const html = await res.text();
-    return stripHtml(html).slice(0, maxChars);
+    const markerAt = html.lastIndexOf(PAGASA_CONTENT_MARKER);
+    if (markerAt === -1) return stripHtml(html).slice(-maxChars);
+    // Start at the container's opening tag, not mid-attribute.
+    return stripHtml(html.slice(html.lastIndexOf('<', markerAt))).slice(0, maxChars);
 }
 
-/** PAGASA has no API; we hand the model truncated plain text of both pages
+/** PAGASA has no API; we hand the model the plain text of both pages' content
  * and let it read the same way a human would. */
 export async function fetchPagasa() {
     const pages = [
@@ -177,7 +186,7 @@ export async function fetchPagasa() {
         { name: 'weather-advisory', url: 'https://www.pagasa.dost.gov.ph/weather/weather-advisory' },
     ];
 
-    const results = await Promise.allSettled(pages.map((p) => fetchPage(p.url, 4000)));
+    const results = await Promise.allSettled(pages.map((p) => fetchPage(p.url, 6000)));
     const data = {};
     const failed = [];
     results.forEach((r, i) => {

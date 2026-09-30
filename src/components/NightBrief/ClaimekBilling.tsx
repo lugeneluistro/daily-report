@@ -40,7 +40,7 @@ const ClaimekBilling: FC<ClaimekBillingProps> = ({ billing }) => {
                                     const pct = p.monthToDateUsd > 0 ? Math.round((item.amount / p.monthToDateUsd) * 100) : 0;
                                     return (
                                         <div key={item.name}>
-                                            <div className="mb-0.5 flex items-baseline justify-between text-[12.5px]">
+                                            <div className="mb-0.5 flex items-baseline justify-between gap-2 text-[12.5px]">
                                                 <span className="truncate text-[#888ea8]">{item.name}</span>
                                                 <span className="flex-none nb-num text-white-light">{usd(item.amount)}</span>
                                             </div>

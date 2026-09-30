@@ -14,7 +14,7 @@ export interface BriefState {
     data: BriefPayload;
     /** False only for the sample fallback. */
     isLive: boolean;
-    /** 'local' = this machine's own backend, on-demand. 'static' = last GitHub Actions run. 'sample' = neither reachable. */
+    /** 'local' = this machine's own backend, on-demand. 'static' = the last file the backend wrote to public/data/brief.json. 'sample' = neither reachable. */
     source: BriefSource;
     loading: boolean;
     reload: () => Promise<void>;
@@ -26,7 +26,7 @@ export interface BriefState {
  * render garbage, and say why — the usual fix is restarting the server.
  */
 function acceptCurrent(json: BriefPayload, origin: string): BriefPayload | null {
-    if (typeof json?.verdict?.ncrSuspension === 'string' && Array.isArray(json.coins)) return json;
+    if (typeof json?.verdict?.ncrSuspension === 'string' && typeof json.verdict.cyclone === 'object' && json.verdict.cyclone !== null && Array.isArray(json.coins)) return json;
     console.warn(`Ignoring an outdated brief from ${origin}. A local server started before the latest update needs a restart.`);
     return null;
 }
@@ -53,9 +53,9 @@ async function fetchStatic(): Promise<BriefPayload | null> {
 
 /**
  * Three-tier source, each covering the one before it: the local backend on
- * this machine (real, on-demand data), the static file GitHub Actions last
- * committed (works from anywhere, once a day), then the sample dashboard —
- * a bad fetch should never blank the page.
+ * this machine (real, on-demand data), the static file it last wrote (still
+ * there when the backend is stopped), then the sample dashboard — a bad fetch
+ * should never blank the page.
  */
 export const useBrief = (): BriefState => {
     const [data, setData] = useState<BriefPayload>(sampleBrief);

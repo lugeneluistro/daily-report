@@ -3,17 +3,21 @@ import { WeatherHour } from '../../data/nightBrief';
 
 interface RainChartProps {
     hours: WeatherHour[];
+    /** Plot height in px — or, with `fill`, the minimum height. */
+    height?: number;
+    /** Grow to the height the parent gives it (the parent must be a flex column with a set height). */
+    fill?: boolean;
 }
 
 const BAR = '#805dca';
-const CHART_HEIGHT = 116;
+const DEFAULT_HEIGHT = 116;
 
 /** Hourly chance of rain across the 8PM-7AM window. Deliberately minimal: bars,
  * a dashed 50% line, a label every other hour, and a tooltip for the exact
  * number. The peak is stated in the card's subtitle, not on the chart. */
-const RainChart: FC<RainChartProps> = ({ hours }) => (
-    <div>
-        <div className="relative" style={{ height: CHART_HEIGHT }}>
+const RainChart: FC<RainChartProps> = ({ hours, height = DEFAULT_HEIGHT, fill = false }) => (
+    <div className={fill ? 'flex h-full flex-col' : undefined}>
+        <div className={fill ? 'relative flex-1' : 'relative'} style={fill ? { minHeight: height } : { height }}>
             <div className="absolute inset-x-0 border-t border-dashed border-[#2c4470]/70" style={{ top: '50%' }} aria-hidden="true" />
 
             <div className="absolute inset-0 flex">
@@ -42,7 +46,7 @@ const RainChart: FC<RainChartProps> = ({ hours }) => (
 
         <div className="mt-1.5 flex">
             {hours.map((h, i) => (
-                <div key={h.label} className="nb-num flex-1 whitespace-nowrap text-center text-[10px] text-[#8794b3]">
+                <div key={h.label} className="nb-num flex-1 whitespace-nowrap text-center text-[10px] text-[#9aa8c4]">
                     {i % 2 === 0 ? h.label : ''}
                 </div>
             ))}

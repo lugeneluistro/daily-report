@@ -1,9 +1,9 @@
 /**
  * Types and sample data for the night-brief dashboard.
  *
- * The dashboard fetches `/data/brief.json` (shape: BriefPayload), written
- * nightly by `scripts/brief/run.mjs` via a GitHub Actions cron. `sampleBrief`
- * below is the fallback shown when that fetch fails or the file is still the
+ * The dashboard reads the brief (shape: BriefPayload) from the local backend,
+ * which writes `public/data/brief.json` on every run. `sampleBrief` below is
+ * the fallback shown when neither is reachable or the file is still the
  * committed seed — see `useBrief`.
  */
 
@@ -51,54 +51,40 @@ export interface FuelInfo {
     call: string | null;
 }
 
+export type RainWarningLevel = 'none' | 'yellow' | 'orange' | 'red' | 'unknown';
+
+export interface CycloneInfo {
+    /** 'none' = PAGASA lists no active cyclone; 'unknown' = the bulletin couldn't be read. */
+    status: 'none' | 'active' | 'unknown';
+    /** PAGASA's local name, e.g. "Ada". Null when inactive, or not yet named locally. */
+    localName: string | null;
+    /** The international name, e.g. "Kalmaegi". Null when inactive or not stated. */
+    internationalName: string | null;
+    /** PAGASA's classification as written, e.g. "Tropical Storm", "Typhoon". */
+    category: string | null;
+    /** Wind signal (1-5) raised over NCR; null when none is. */
+    ncrSignal: number | null;
+}
+
+export interface RainfallInfo {
+    /** Colour of the PAGASA rainfall warning active over NCR. */
+    level: RainWarningLevel;
+    /** e.g. "2AM" — when that warning runs until, if stated. */
+    until: string | null;
+    /** No official warning, but an hour tonight is forecast at 15mm/h or more. */
+    heavyRainLikely: boolean;
+}
+
 export interface VerdictInfo {
     /** Drives the work-from-home card's colour: office = green, watch = amber, wfh = red. */
     call: Verdict;
     /** A government work suspension covering NCR for tonight. */
     ncrSuspension: 'yes' | 'no' | 'unknown';
-    /** "None", or a short status such as "Signal No. 2 over NCR". */
-    cyclone: string;
-    /** "None", or the active rainfall warning such as "Orange until 2AM". */
-    rainfall: string;
+    cyclone: CycloneInfo;
+    rainfall: RainfallInfo;
     /** Jacket / sweatshirt advice from the night's low. Null if weather failed. */
     jacket: 'Recommended' | 'Not recommended' | null;
     lowTempC: number | null;
-    deadline: string;
-}
-
-export interface EmailItem {
-    id: string;
-    from: string;
-    subject: string;
-    /** Why this was surfaced, written by the nightly filter — not the raw Gmail snippet. */
-    summary: string;
-    /** Looks time-sensitive or needs a reply this shift. */
-    important: boolean;
-}
-
-export interface EmailAccountSummary {
-    /** The account's email address (or a GMAIL_ACCOUNT_n_LABEL override). */
-    label: string;
-    unreadCount: number;
-    /** Up to 5 unread messages the nightly filter judged worth surfacing. */
-    items: EmailItem[];
-}
-
-export interface CalendarEvent {
-    id: string;
-    title: string;
-    /** Pre-formatted Manila-local display time, e.g. "8:30 PM", "Tomorrow 9:00 AM", "All day". */
-    startLabel: string;
-    location: string | null;
-    /** Starts inside tonight's 8PM-7AM window. */
-    duringShift: boolean;
-}
-
-export interface CalendarAccountSummary {
-    /** The account's email address (or a GMAIL_ACCOUNT_n_LABEL override). */
-    label: string;
-    /** Next few events over the following ~36h, chronological. */
-    events: CalendarEvent[];
 }
 
 export interface BudgetCategory {
@@ -151,10 +137,6 @@ export interface BriefPayload {
     coins: Coin[];
     aiNews: NewsItem[];
     phNews: NewsItem[];
-    /** Null when no Gmail account is configured — the card is then absent. */
-    email: EmailAccountSummary[] | null;
-    /** Null when no Google account is configured — the card is then absent. */
-    calendar: CalendarAccountSummary[] | null;
     /** Null when neither OpenAI nor AWS billing is configured — the card is then absent. */
     claimekBilling: ClaimekBillingInfo | null;
     gapsNote: string | null;
@@ -171,11 +153,10 @@ export const sampleBrief: BriefPayload = {
     verdict: {
         call: 'watch',
         ncrSuspension: 'no',
-        cyclone: 'None',
-        rainfall: 'Orange until 2AM',
+        cyclone: { status: 'none', localName: null, internationalName: null, category: null, ncrSignal: null },
+        rainfall: { level: 'orange', until: '2AM', heavyRainLikely: false },
         jacket: 'Not recommended',
         lowTempC: 25,
-        deadline: 'Decide by 6PM',
     },
     weatherHours: [
         { label: '8PM', tonight: 12 },
@@ -309,57 +290,6 @@ export const sampleBrief: BriefPayload = {
             source: 'example.com',
             href: 'https://example.com',
             tone: 'info',
-        },
-    ],
-    email: [
-        {
-            label: 'lugeneluistro@gmail.com',
-            unreadCount: 12,
-            items: [
-                {
-                    id: 'email-1',
-                    from: 'Landlord',
-                    subject: 'Re: Lease renewal',
-                    summary: 'Waiting on your reply before Friday to lock in the renewed rate.',
-                    important: true,
-                },
-                {
-                    id: 'email-2',
-                    from: 'BPI Alerts',
-                    subject: 'Your statement is ready',
-                    summary: 'Routine statement notice, nothing time-sensitive.',
-                    important: false,
-                },
-            ],
-        },
-        {
-            label: 'lugene12@gmail.com',
-            unreadCount: 4,
-            items: [
-                {
-                    id: 'email-3',
-                    from: 'Maria (PM)',
-                    subject: 'Sprint review moved to tomorrow AM',
-                    summary: 'Meeting was pulled forward — check before the shift starts.',
-                    important: true,
-                },
-            ],
-        },
-    ],
-    calendar: [
-        {
-            label: 'lugeneluistro@gmail.com',
-            events: [
-                { id: 'cal-1', title: 'Gym', startLabel: '9:30 PM', location: null, duringShift: true },
-                { id: 'cal-2', title: "Dentist — Dr. Reyes", startLabel: 'Tomorrow 2:00 PM', location: 'Makati Medical Center', duringShift: false },
-            ],
-        },
-        {
-            label: 'lugene12@gmail.com',
-            events: [
-                { id: 'cal-3', title: 'Sprint review', startLabel: 'Tomorrow 9:00 AM', location: 'Google Meet', duringShift: false },
-                { id: 'cal-4', title: 'On-call handoff', startLabel: '11:00 PM', location: null, duringShift: true },
-            ],
         },
     ],
     claimekBilling: {

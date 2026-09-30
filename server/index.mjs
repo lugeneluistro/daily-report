@@ -4,8 +4,7 @@
 // ecosystem.config.cjs and the setup notes in the project chat.
 //
 // Runs the same pipeline as `npm run brief`, just triggerable on demand
-// (POST /api/brief/refresh) and on an internal schedule, instead of only
-// once a day via GitHub Actions.
+// (POST /api/brief/refresh) and on an internal schedule (5PM Manila daily).
 
 import cors from 'cors';
 import express from 'express';
@@ -74,7 +73,7 @@ app.post('/api/brief/refresh', async (_req, res) => {
     }
 });
 
-// 09:00 UTC = 5PM Manila (PHT, UTC+8) — same timing as the GitHub Actions cron.
+// 5PM Manila, an hour before the WFH decision deadline.
 cron.schedule('0 17 * * *', () => runGeneration().catch((err) => console.error('Scheduled generation failed:', err)), { timezone: 'Asia/Manila' });
 
 app.listen(PORT, HOST, () => {

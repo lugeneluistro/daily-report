@@ -9,25 +9,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { manilaNow, fetchWeather, fetchCoins, fetchPagasa, fetchFeeds, fetchSuspensionNews } from './sources.mjs';
-import { fetchGmail } from './gmail.mjs';
-import { fetchCalendar } from './calendar.mjs';
 import { fetchClaimekBilling, checkBillingAlert } from './billing.mjs';
 import { judgeBrief } from './llm.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const OUTPUT_PATH = join(__dirname, '..', '..', 'public', 'data', 'brief.json');
 
-const WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 const WEEKDAY_LABEL = { Sun: 'Sun', Mon: 'Mon', Tue: 'Tue', Wed: 'Wed', Thu: 'Thu', Fri: 'Fri', Sat: 'Sat' };
 const MONTH_LABEL = { 1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec' };
-
-/** SKILL.md §2: the call binds Mon-Wed, and Thu before 8PM. Every other run
- * (Thu night, Fri, weekends) is advisory only. */
-function callBinds(clock) {
-    const day = WEEKDAY_INDEX[clock.weekday];
-    if (day >= 1 && day <= 3) return true;
-    return day === 4 && clock.hour < 20;
-}
 
 /** Rule from the report-today skill (§1): a low of 23C or below makes a jacket
  * or sweatshirt worth it. */
@@ -37,16 +26,13 @@ const JACKET_BELOW_C = 24;
  * Pure — never touches the filesystem. */
 export async function generateBrief() {
     const clock = manilaNow();
-    const live = callBinds(clock);
 
-    const [weatherResult, coinsResult, pagasaResult, feedsResult, suspensionResult, gmailResult, calendarResult, billingResult] = await Promise.all([
+    const [weatherResult, coinsResult, pagasaResult, feedsResult, suspensionResult, billingResult] = await Promise.all([
         fetchWeather(),
         fetchCoins(),
         fetchPagasa(),
         fetchFeeds(),
         fetchSuspensionNews(),
-        fetchGmail(),
-        fetchCalendar(),
         fetchClaimekBilling(),
     ]);
 
@@ -61,18 +47,10 @@ export async function generateBrief() {
     if (!suspensionResult.ok) deterministicGaps.push(`government work-suspension search failed (${suspensionResult.reason})`);
 
     // "Not configured" is not a gap — it's an expected absence until secrets are set.
-    // A configured account that fails to fetch is a real gap.
-    if (gmailResult.ok && gmailResult.partialFailure) {
-        deterministicGaps.push(`email account(s) unreachable: ${gmailResult.partialFailure.join('; ')}`);
-    }
-    if (calendarResult.ok && calendarResult.partialFailure) {
-        deterministicGaps.push(`calendar account(s) unreachable: ${calendarResult.partialFailure.join('; ')}`);
-    }
+    // A configured provider that fails to fetch is a real gap.
     if (billingResult.ok && billingResult.partialFailure) {
         deterministicGaps.push(`billing provider(s) unreachable: ${billingResult.partialFailure.join('; ')}`);
     }
-
-    const emailAccounts = gmailResult.ok ? gmailResult.data.map((a) => ({ label: a.label, unreadCount: a.unreadCount, candidates: a.candidates })) : [];
 
     const judged = await judgeBrief({
         manilaClock: clock,
@@ -82,7 +60,6 @@ export async function generateBrief() {
         suspension: { searched: suspensionResult.ok, candidates: suspensionResult.ok ? suspensionResult.data : [] },
         pagasaFailedPages,
         feedsFailedSources,
-        emailAccounts,
     });
 
     // Crypto: always show all three tracked coins. `clearsGate` (500%+ in 24h)
@@ -96,10 +73,11 @@ export async function generateBrief() {
         call: judged.wfh.call,
         ncrSuspension: judged.wfh.ncrSuspension,
         cyclone: judged.wfh.cyclone,
-        rainfall: judged.wfh.rainfall,
+        // The 15mm/h flag is computed from the forecast, not judged — it stays true even when
+        // PAGASA has issued nothing, and the dashboard shows it as its own softer note.
+        rainfall: { ...judged.wfh.rainfall, heavyRainLikely: weather ? weather.anyHourAtOrAbove15mm : false },
         jacket: weather ? (weather.minTemp < JACKET_BELOW_C ? 'Recommended' : 'Not recommended') : null,
         lowTempC: weather ? weather.minTemp : null,
-        deadline: live ? 'Decide by 6PM' : 'Advisory only',
     };
 
     // Gasoline only. The news often reports the weekly change without the pump
@@ -130,11 +108,6 @@ export async function generateBrief() {
         coins,
         aiNews: judged.aiNews.map((n, i) => ({ id: `ai-${i + 1}`, ...n })),
         phNews: judged.phNews.map((n, i) => ({ id: `ph-${i + 1}`, ...n })),
-        // Absent (not just empty) when no Gmail/Google account is configured, so the card hides.
-        email: gmailResult.ok
-            ? judged.email.map((acct) => ({ ...acct, items: acct.items.map((item, i) => ({ id: item.id || `email-${i}`, ...item })) }))
-            : null,
-        calendar: calendarResult.ok ? calendarResult.data : null,
         claimekBilling: billingResult.ok ? { monthLabel: `${MONTH_LABEL[clock.month]} ${clock.year}`, providers: billingResult.data } : null,
         gapsNote: gaps.length ? gaps.join('; ') : null,
     };
