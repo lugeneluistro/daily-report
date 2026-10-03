@@ -12,6 +12,7 @@ import RefreshButton from '../components/NightBrief/RefreshButton';
 import StormRainStatus from '../components/NightBrief/StormRainStatus';
 import Timeline from '../components/NightBrief/Timeline';
 import { useBrief } from '../components/NightBrief/useBrief';
+import { useBudget } from '../components/NightBrief/useBudget';
 import { formatDateTime, useRefresh } from '../components/NightBrief/useRefresh';
 
 import IconCircleCheck from '../components/Icon/IconCircleCheck';
@@ -20,8 +21,6 @@ import IconCpuBolt from '../components/Icon/IconCpuBolt';
 import IconInfoTriangle from '../components/Icon/IconInfoTriangle';
 import IconServer from '../components/Icon/IconServer';
 import IconTrendingUp from '../components/Icon/IconTrendingUp';
-
-import { mockBudget } from '../data/nightBrief';
 
 const PH_ICONS = {
     success: <IconCircleCheck className="h-4 w-4" />,
@@ -65,11 +64,12 @@ const NightBrief = () => {
     const aiRefresh = useRefresh(reload);
     const phRefresh = useRefresh(reload);
     const marketRefresh = useRefresh(reload);
-    const cards = [weatherRefresh, billingRefresh, aiRefresh, phRefresh, marketRefresh];
 
-    // Budget is mock-only (no integration yet), so its refresh is purely
-    // decorative and stays out of "Refresh all" — there is nothing real to pull.
-    const budgetRefresh = useRefresh();
+    // The Budget card has its own source: the local expense ledger (see useBudget). Refreshing it
+    // just re-reads that ledger — no model call — and it is part of "Refresh all".
+    const { budget, status: budgetStatus, reload: reloadBudget } = useBudget();
+    const budgetRefresh = useRefresh(reloadBudget);
+    const cards = [weatherRefresh, billingRefresh, aiRefresh, phRefresh, marketRefresh, budgetRefresh];
 
     const anyBusy = cards.some((c) => c.busy);
     const refreshAll = () => cards.forEach((c) => c.refresh());
@@ -96,6 +96,17 @@ const NightBrief = () => {
     ];
 
     const call = VERDICT[verdict.call];
+
+    const entries = budget.entriesThisMonth ?? 0;
+    const budgetMeta =
+        budgetStatus === 'live'
+            ? `From your Telegram expense log · ${entries} ${entries === 1 ? 'entry' : 'entries'} this month`
+            : budgetStatus === 'not-configured'
+              ? 'Sample data — the Telegram expense bot is not set up yet'
+              : budgetStatus === 'outdated'
+                ? 'Sample data — restart the backend to load the budget update'
+                : 'Sample data — the backend is not reachable';
+    const budgetStamp = budgetStatus === 'live' && budget.asOf ? new Date(budget.asOf) : null;
 
     const rainPeak = weatherHours.length > 0 ? weatherHours.reduce((best, h) => (h.tonight > best.tonight ? h : best), weatherHours[0]) : null;
 
@@ -200,10 +211,10 @@ const NightBrief = () => {
                     </div>
 
                     {/* ROW 3 — BUDGET (half width; the other half is free for a future card). */}
-                    {/* BUDGET — mock data, no integration yet. Always shown, never claims to be live. */}
+                    {/* BUDGET — real spending from the Telegram expense log once the bot is set up; until then the sample, labelled as sample data. */}
                     <div className="col-span-12 md:col-span-6">
-                        <CardShell title="Budget" accent={ACCENT.budget} meta="Mock data — no bank integration yet" busy={budgetRefresh.busy} updatedAt={null} onRefresh={budgetRefresh.refresh}>
-                            <BudgetOverview budget={mockBudget} />
+                        <CardShell title="Budget" accent={ACCENT.budget} meta={budgetMeta} busy={budgetRefresh.busy} updatedAt={budgetStamp} onRefresh={budgetRefresh.refresh}>
+                            <BudgetOverview budget={budget} />
                         </CardShell>
                     </div>
                 </div>

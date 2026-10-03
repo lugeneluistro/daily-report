@@ -4,7 +4,7 @@ import { BriefPayload, sampleBrief } from '../../data/nightBrief';
 // Local backend from server/index.mjs — binds 127.0.0.1 only, so this is only
 // ever reachable when viewing the dashboard on the same machine that's
 // running it. Never touched from anywhere else.
-const LOCAL_API = 'http://127.0.0.1:4700';
+export const LOCAL_API = 'http://127.0.0.1:4700';
 const PING_TIMEOUT_MS = 3000; // GET is just cached JSON — fail fast if the server's not running.
 const REFRESH_TIMEOUT_MS = 45000; // POST runs the real pipeline (fetches + one LLM call).
 

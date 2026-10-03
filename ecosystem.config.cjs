@@ -5,7 +5,7 @@
 //   pm2-startup install
 //
 // Start (from this directory, with ANTHROPIC_API_KEY — and the optional
-// OPENAI_* / AWS_* / CALLMEBOT_* keys — already set as Windows *User*
+// OPENAI_* / AWS_* / CALLMEBOT_* / TELEGRAM_* keys — already set as Windows *User*
 // environment variables — pm2 inherits whatever env it was started with):
 //   pm2 start ecosystem.config.cjs
 //   pm2 save

@@ -90,17 +90,34 @@ export interface VerdictInfo {
 export interface BudgetCategory {
     name: string;
     spent: number;
-    limit: number;
+    /** Null for a category with no monthly limit, such as "Other". */
+    limit: number | null;
 }
 
 /** Mock only — not wired to a real source yet. See mockBudget below. */
-export interface BudgetMock {
+/** One logged expense, as the Budget card lists it. */
+export interface BudgetExpense {
+    id: string;
+    /** YYYY-MM-DD */
+    date: string;
+    merchant: string;
+    category: string;
+    amount: number;
+}
+
+/** The Budget card's data. The sample below fills the same shape; the real one comes from the local backend's /api/budget. */
+export interface BudgetInfo {
     monthLabel: string;
     totalSpent: number;
     totalLimit: number;
     daysLeftInMonth: number;
     categories: BudgetCategory[];
     note: string;
+    /** The newest few entries, newest first. Absent in the sample. */
+    recent?: BudgetExpense[];
+    entriesThisMonth?: number;
+    /** When the backend computed this (ISO). Absent in the sample. */
+    asOf?: string;
 }
 
 export interface BillingLineItem {
@@ -325,7 +342,7 @@ export const sampleBrief: BriefPayload = {
  * Mock only — no budget source is wired up yet. Shown as-is regardless of
  * isLive, with its own "Mock data" meta line so it never reads as real.
  */
-export const mockBudget: BudgetMock = {
+export const mockBudget: BudgetInfo = {
     monthLabel: 'September',
     totalSpent: 28450,
     totalLimit: 35000,

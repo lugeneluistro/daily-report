@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Personal expense ledger written by the Telegram bot (server/ledger.mjs) - never commit
+/data/

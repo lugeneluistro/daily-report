@@ -14,9 +14,40 @@ import { dirname } from 'node:path';
 
 import { checkBillingAlert } from '../scripts/brief/billing.mjs';
 import { generateBrief, OUTPUT_PATH } from '../scripts/brief/run.mjs';
+import { manilaNow } from '../scripts/brief/sources.mjs';
+import { createLedger, summarizeMonth } from './ledger.mjs';
+import { startTelegramBot } from './telegram.mjs';
 
-const PORT = 4700;
+// The dashboard calls 4700, so only change this to run a second copy for testing.
+const PORT = Number(process.env.NIGHT_BRIEF_PORT) || 4700;
 const HOST = '127.0.0.1';
+
+// Telegram expense bot (feeds the Budget card). Both come from the user's
+// environment variables; without a token the bot simply doesn't start.
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// data/budget.json by default (gitignored). BUDGET_LEDGER_PATH moves it, e.g. somewhere that gets backed up.
+const ledger = createLedger(process.env.BUDGET_LEDGER_PATH || undefined);
+
+// Pages allowed to talk to this server: anything on this machine (the dev
+// server, a preview build), plus any extra origins listed in DASHBOARD_ORIGINS
+// (comma-separated) — only needed if the dashboard is opened from a deployed URL.
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]']);
+const EXTRA_ORIGINS = new Set(
+    (process.env.DASHBOARD_ORIGINS ?? '')
+        .split(',')
+        .map((o) => o.trim().replace(/\/$/, ''))
+        .filter(Boolean),
+);
+
+function isAllowedOrigin(origin) {
+    if (EXTRA_ORIGINS.has(origin.replace(/\/$/, ''))) return true;
+    try {
+        return LOCAL_HOSTNAMES.has(new URL(origin).hostname);
+    } catch {
+        return false;
+    }
+}
 
 let cached = null;
 let generating = null; // in-flight promise, so concurrent refresh calls share one run
@@ -50,10 +81,19 @@ async function readFromDisk() {
 }
 
 const app = express();
-// Safe to leave open: the loopback bind below already makes this socket
-// unreachable from any other machine. CORS here only controls which page's
-// JS may read the response, not who can reach the port.
-app.use(cors());
+
+// The loopback bind keeps other machines out, but not other *websites*: any page
+// open in this browser can call http://127.0.0.1:4700, and with open CORS it
+// could read your billing and spending. So refuse requests from foreign origins
+// outright (this also stops a foreign page from triggering a refresh), and refuse
+// foreign Host headers (DNS rebinding).
+app.use((req, res, next) => {
+    const host = (req.headers.host ?? '').replace(/:\d+$/, '');
+    if (!LOCAL_HOSTNAMES.has(host)) return res.status(403).json({ error: 'forbidden host' });
+    if (req.headers.origin && !isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: 'forbidden origin' });
+    next();
+});
+app.use(cors({ origin: (origin, done) => done(null, !origin || isAllowedOrigin(origin)) }));
 
 app.get('/api/brief', async (_req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -73,10 +113,41 @@ app.post('/api/brief/refresh', async (_req, res) => {
     }
 });
 
+// The Budget card's numbers. Kept out of the brief (and out of brief.json, which
+// is tracked by git): they come straight from the local expense ledger, so the
+// card updates the moment you log something, with no model call.
+app.get('/api/budget', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!TELEGRAM_TOKEN) return res.json({ configured: false });
+    try {
+        res.json({ configured: true, budget: await ledger.read((state) => summarizeMonth(state, manilaNow())) });
+    } catch (err) {
+        console.error('Budget read failed:', err);
+        res.status(500).json({ error: 'could not read the expense ledger' });
+    }
+});
+
 // 5PM Manila, an hour before the WFH decision deadline.
 cron.schedule('0 17 * * *', () => runGeneration().catch((err) => console.error('Scheduled generation failed:', err)), { timezone: 'Asia/Manila' });
+
+let bot = null;
 
 app.listen(PORT, HOST, () => {
     console.log(`Night brief server listening on http://${HOST}:${PORT}`);
     console.log('Scheduled for 5PM Asia/Manila daily. POST /api/brief/refresh to run it now.');
+
+    if (!TELEGRAM_TOKEN) {
+        console.log('[telegram] expense bot off — set TELEGRAM_BOT_TOKEN (and TELEGRAM_CHAT_ID) to turn the Budget card into a real expense log.');
+        return;
+    }
+    if (!process.env.ANTHROPIC_API_KEY) console.warn('[telegram] ANTHROPIC_API_KEY is not set — the bot cannot read expenses without it.');
+    bot = startTelegramBot({ token: TELEGRAM_TOKEN, ownerChatId: TELEGRAM_CHAT_ID, ledger });
 });
+
+// PM2 and Ctrl+C both send SIGINT: end the open Telegram poll instead of leaving it dangling.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+        bot?.stop();
+        process.exit(0);
+    });
+}
